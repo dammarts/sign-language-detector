@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 
 os.environ.setdefault('GLOG_minloglevel', '2')
@@ -82,7 +83,11 @@ _camera_active    = False
 def _start_camera():
     def worker():
         global _latest_annotated, _latest_landmarks, _camera_active
-        cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        # CAP_DSHOW (DirectShow) requerido en Windows; en Linux usar backend por defecto
+        if sys.platform == 'win32':
+            cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        else:
+            cam = cv2.VideoCapture(0)
 
         if not cam.isOpened():
             _camera_active = False

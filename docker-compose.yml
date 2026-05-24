@@ -1,0 +1,11 @@
+services:
+  sign-detector:
+    build: .
+    ports:
+      - "5000:5000"
+    # Acceso a la cámara en Linux: pasar el dispositivo al contenedor
+    # En Windows/Mac con Docker Desktop esta sección no aplica
+    devices:
+      - /dev/video0:/dev/video0
+    environment:
+      - PYTHONUNBUFFERED=1
