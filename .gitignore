@@ -221,3 +221,6 @@ __marimo__/
 
 # Claude Code workspace
 .claude/
+
+# Claude project documentation (local only)
+CLAUDE.md

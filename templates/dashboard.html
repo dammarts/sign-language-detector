@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Progreso — Sign.Detect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">📊</div>
+      <div class="logo-copy">
+        <div class="logo-title">Sign.Detect</div>
+        <div class="logo-sub">Dashboard de Progreso</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <a href="/" class="nav-link">← Detector</a>
+      <a href="/learn" class="nav-link">🤟 Aprender</a>
+      <a href="/spell" class="nav-link">✏️ Deletrear</a>
+    </div>
+  </header>
+
+  <main class="dash-main">
+
+    <!-- Stats rápidas -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-sessions">0</div>
+        <div class="stat-label">Sesiones</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-letters">0</div>
+        <div class="stat-label">Letras completadas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-perfect">0</div>
+        <div class="stat-label">Letras perfectas ⭐⭐⭐</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-time">0m</div>
+        <div class="stat-label">Tiempo total</div>
+      </div>
+    </div>
+
+    <!-- Gráfica A-Z -->
+    <div class="chart-card">
+      <div class="chart-title">Nivel por letra (mejor racha histórica)</div>
+      <div class="chart-wrap">
+        <canvas id="progress-chart"></canvas>
+      </div>
+      <div class="chart-legend">
+        <span class="leg-item"><span class="leg-dot" style="background:#01f50d"></span>3 ⭐ perfecto</span>
+        <span class="leg-item"><span class="leg-dot" style="background:#f5c518"></span>2 ⭐</span>
+        <span class="leg-item"><span class="leg-dot" style="background:#f06060"></span>1 ⭐</span>
+        <span class="leg-item"><span class="leg-dot" style="background:#1e2030"></span>sin practicar</span>
+      </div>
+    </div>
+
+    <!-- Historial de sesiones -->
+    <div class="chart-card">
+      <div class="chart-title">Historial de sesiones</div>
+      <div id="history-empty" class="history-empty">Sin sesiones registradas aún.</div>
+      <div class="history-list" id="history-list"></div>
+      <button class="lrn-btn end-btn" id="clear-btn" onclick="clearHistory()"
+              style="display:none;margin-top:14px;width:auto;padding:7px 16px">
+        🗑 Borrar historial
+      </button>
+    </div>
+
+  </main>
+
+  <footer>
+    <span>SIGN.DETECT v2.0</span>
+    <div class="stack">
+      <span>MediaPipe</span><div class="sep"></div>
+      <span>RandomForest</span><div class="sep"></div>
+      <span>Flask</span>
+    </div>
+  </footer>
+
+  <script>
+    const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const history  = JSON.parse(localStorage.getItem('signdetect_history') || '[]');
+
+    // ── Métricas por letra ────────────────────────────────────────────────
+    const letterBest = {};   // letra → mejor stars
+    let totalCompleted = 0, totalPerfect = 0, totalTimeMs = 0;
+
+    for (const s of history) {
+      totalTimeMs += s.duration_ms || 0;
+      for (const [letter, d] of Object.entries(s.letters || {})) {
+        if (d.completed) {
+          totalCompleted++;
+          if (!letterBest[letter] || d.stars > letterBest[letter])
+            letterBest[letter] = d.stars;
+        }
+      }
+    }
+    totalPerfect = Object.values(letterBest).filter(v => v === 3).length;
+
+    // ── Stats rápidas ─────────────────────────────────────────────────────
+    document.getElementById('stat-sessions').textContent = history.length;
+    document.getElementById('stat-letters').textContent  = totalCompleted;
+    document.getElementById('stat-perfect').textContent  = totalPerfect;
+    const totalMin = Math.round(totalTimeMs / 60000);
+    document.getElementById('stat-time').textContent =
+      totalMin >= 60 ? `${Math.floor(totalMin/60)}h ${totalMin%60}m` : `${totalMin}m`;
+
+    // ── Gráfica ───────────────────────────────────────────────────────────
+    const starValues = ALPHABET.map(l => letterBest[l] || 0);
+    const barColors  = starValues.map(v =>
+      v === 3 ? '#01f50d' : v === 2 ? '#f5c518' : v === 1 ? '#f06060' : '#1e2030');
+
+    new Chart(document.getElementById('progress-chart'), {
+      type: 'bar',
+      data: {
+        labels: ALPHABET,
+        datasets: [{
+          data: starValues,
+          backgroundColor: barColors,
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return v === 3 ? '⭐⭐⭐ Perfecto' : v === 2 ? '⭐⭐' : v === 1 ? '⭐' : 'Sin practicar';
+            }
+          }
+        }},
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' },
+               ticks: { color: '#8b91a8', font: { family: 'Fira Code', size: 11 } } },
+          y: { min: 0, max: 3, ticks: { stepSize: 1, color: '#8b91a8',
+               callback: v => ['—','⭐','⭐⭐','⭐⭐⭐'][v] || '',
+               font: { family: 'Fira Code', size: 11 } },
+               grid: { color: 'rgba(255,255,255,0.04)' } }
+        }
+      }
+    });
+
+    // ── Historial ─────────────────────────────────────────────────────────
+    if (history.length > 0) {
+      document.getElementById('history-empty').style.display = 'none';
+      document.getElementById('clear-btn').style.display = 'inline-block';
+      const list = document.getElementById('history-list');
+
+      [...history].reverse().forEach((s, idx) => {
+        const date    = new Date(s.date).toLocaleString('es');
+        const dur     = Math.round((s.duration_ms||0) / 1000);
+        const entries = Object.values(s.letters || {});
+        const done    = entries.filter(e => e.completed).length;
+        const perfect = entries.filter(e => e.stars === 3).length;
+
+        const row = document.createElement('div');
+        row.className = 'history-row';
+        row.innerHTML = `
+          <div class="h-date">${date}</div>
+          <div class="h-stats">
+            <span>${s.country || 'asl'}</span>
+            <span>${done} letras</span>
+            <span>${perfect} ⭐⭐⭐</span>
+            <span>${Math.floor(dur/60)}m ${dur%60}s</span>
+          </div>`;
+        list.appendChild(row);
+      });
+    }
+
+    function clearHistory() {
+      if (confirm('¿Borrar todo el historial de progreso?')) {
+        localStorage.removeItem('signdetect_history');
+        location.reload();
+      }
+    }
+  </script>
+</body>
+</html>

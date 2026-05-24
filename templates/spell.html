@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deletrear — Sign.Detect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/spell.css') }}">
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">✏️</div>
+      <div class="logo-copy">
+        <div class="logo-title">Sign.Detect</div>
+        <div class="logo-sub">Modo Deletrear</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <a href="/" class="nav-link">← Detector</a>
+      <a href="/learn" class="nav-link">🤟 Aprender</a>
+      <a href="/dashboard" class="nav-link">📊 Progreso</a>
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        <span id="spell-timer">00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+
+      <!-- Palabra actual -->
+      <div class="sidebar-block">
+        <div class="block-label">Palabra</div>
+        <div class="word-card" id="word-card">
+          <div class="word-display" id="word-display"></div>
+          <div class="word-progress" id="word-progress">0 / 0</div>
+        </div>
+      </div>
+
+      <!-- Score -->
+      <div class="sidebar-block">
+        <div class="block-label">Letra actual</div>
+        <div class="spell-target" id="spell-target">—</div>
+        <div class="score-row" style="margin-top:10px">
+          <div class="score-bar-wrap">
+            <div class="score-bar" id="score-bar"></div>
+          </div>
+          <div class="score-pct" id="score-pct">0%</div>
+        </div>
+        <div class="feedback-text" id="feedback-text">Coloca tu mano frente a la cámara</div>
+      </div>
+
+      <!-- Puntuación -->
+      <div class="sidebar-block">
+        <div class="block-label">Puntuación</div>
+        <div class="spell-score-display">
+          <div class="spell-score-val" id="spell-score">0</div>
+          <div class="spell-score-sub">puntos</div>
+        </div>
+        <div class="spell-combo" id="spell-combo"></div>
+      </div>
+
+      <!-- Lista de palabras -->
+      <div class="sidebar-block">
+        <div class="block-label">Palabras</div>
+        <div class="word-list" id="word-list"></div>
+      </div>
+
+      <!-- Idioma -->
+      <div class="sidebar-block">
+        <div class="block-label">Idioma</div>
+        <div class="country-list">
+          {% for key, meta in countries.items() %}
+          <button
+            class="country-btn {% if key == current_country %}active{% endif %}"
+            data-country="{{ key }}" data-name="{{ meta.name }}" data-flag="{{ meta.flag }}"
+            {% if not meta.available %}disabled{% endif %}
+            onclick="switchCountry(this)">
+            <span class="c-flag">{{ meta.flag }}</span>
+            <span class="c-info"><span class="c-name">{{ meta.name }}</span></span>
+            {% if meta.available %}<span class="c-badge badge-ok">listo</span>
+            {% else %}<span class="c-badge badge-none">sin modelo</span>{% endif %}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- VIDEO -->
+    <section class="video-area">
+      <div class="video-wrap">
+        <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+        <div class="video-frame">
+          <div class="hud">
+            <span class="hud-flag" id="hud-flag">{{ countries[current_country].flag }}</span>
+            <span class="hud-name" id="hud-name">{{ countries[current_country].name }}</span>
+          </div>
+          <div class="v-overlay" id="loading-overlay">
+            <div class="spin"></div>
+            <div class="v-overlay-text">Iniciando cámara…</div>
+          </div>
+          <div class="v-switch" id="switch-overlay">
+            <div class="spin"></div>
+            <div class="v-switch-text" id="switch-text">Cargando modelo…</div>
+          </div>
+          <img src="{{ url_for('video_feed') }}" alt="Cámara"
+               onload="document.getElementById('loading-overlay').classList.add('gone')">
+        </div>
+      </div>
+      <div class="meta-bar">
+        <div class="tag">🎥 <span>cámara 0 · espejo</span></div>
+        <div class="tag">modelo: <span id="active-country-label" class="accent-val">{{ current_country }}</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>SIGN.DETECT — Modo Deletrear</span>
+    <div class="stack">
+      <span>MediaPipe</span><div class="sep"></div>
+      <span>RandomForest</span><div class="sep"></div>
+      <span>Flask</span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast">
+    <span class="toast-icon" id="toast-icon">✓</span>
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- Modal fin de ronda -->
+  <div class="summary-overlay" id="summary-overlay">
+    <div class="summary-modal">
+      <div class="summary-title">¡Ronda completada! 🎉</div>
+      <div class="summary-time" id="spell-result"></div>
+      <div class="summary-actions" style="margin-top:16px">
+        <button class="lrn-btn" onclick="location.href='/dashboard'">📊 Ver progreso</button>
+        <button class="lrn-btn primary" onclick="resetGame()">Jugar de nuevo</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const words         = {{ words | tojson }};
+    let currentCountry  = '{{ current_country }}';
+    let wordIdx         = 0;
+    let letterIdx       = 0;
+    let successCount    = 0;
+    let score           = 0;
+    let combo           = 0;
+    let wordStartMs     = Date.now();
+    let gameStartMs     = Date.now();
+    const NEEDED        = 3;   // detecciones consecutivas para avanzar letra
+
+    // ── Timer ──────────────────────────────────────────────────────────────
+    setInterval(() => {
+      const s = Math.floor((Date.now() - gameStartMs) / 1000);
+      document.getElementById('spell-timer').textContent =
+        `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+    }, 1000);
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function renderWord() {
+      if (wordIdx >= words.length) { showResult(); return; }
+      const word = words[wordIdx];
+      letterIdx    = 0;
+      successCount = 0;
+      wordStartMs  = Date.now();
+      updateWordDisplay();
+      document.getElementById('word-progress').textContent =
+        `${wordIdx + 1} / ${words.length}`;
+      document.getElementById('spell-target').textContent = word[0];
+      document.getElementById('feedback-text').textContent = 'Coloca tu mano frente a la cámara';
+      const bar = document.getElementById('score-bar');
+      bar.style.width = '0%'; bar.className = 'score-bar';
+      document.getElementById('score-pct').textContent = '0%';
+    }
+
+    function updateWordDisplay() {
+      const word = words[wordIdx];
+      document.getElementById('word-display').innerHTML = word.split('').map((c, i) => {
+        let cls = 'wl';
+        if (i < letterIdx)  cls += ' done';
+        if (i === letterIdx) cls += ' active';
+        return `<span class="${cls}">${c}</span>`;
+      }).join('');
+    }
+
+    function buildWordList() {
+      const list = document.getElementById('word-list');
+      list.innerHTML = '';
+      words.forEach((w, i) => {
+        const el = document.createElement('div');
+        el.className = 'wl-item' + (i === wordIdx ? ' active' : '');
+        el.id = `wl-${i}`;
+        el.textContent = w;
+        el.onclick = () => { wordIdx = i; renderWord(); };
+        list.appendChild(el);
+      });
+    }
+
+    // ── Polling ────────────────────────────────────────────────────────────
+    async function updateScore() {
+      if (wordIdx >= words.length) return;
+      const letter = words[wordIdx][letterIdx];
+      try {
+        const res  = await fetch(`/learn/score?letter=${letter}`);
+        const data = await res.json();
+        const pct  = Math.round((data.score || 0) * 100);
+
+        const bar = document.getElementById('score-bar');
+        bar.style.width = pct + '%';
+        bar.className   = 'score-bar' +
+          (pct >= 85 ? ' bar-green' : pct >= 55 ? ' bar-yellow' : ' bar-red');
+        document.getElementById('score-pct').textContent = pct + '%';
+
+        const fb = document.getElementById('feedback-text');
+        if (!data.detected) {
+          fb.textContent = 'Coloca tu mano frente a la cámara';
+          successCount = 0;
+        } else if (pct >= 85) {
+          successCount++;
+          fb.textContent = `✓ "${letter}" detectada (${successCount}/${NEEDED})`;
+          if (successCount >= NEEDED) advanceLetter();
+        } else {
+          successCount = 0;
+          fb.textContent = pct > 0 ? `Ajusta la posición de "${letter}"` : `Seña la letra "${letter}"`;
+        }
+      } catch (_) {}
+    }
+    setInterval(updateScore, 200);
+
+    function advanceLetter() {
+      successCount = 0;
+      combo++;
+      const word = words[wordIdx];
+
+      // Bonus por combo
+      const points = 10 + (combo > 3 ? 5 : 0);
+      score += points;
+      document.getElementById('spell-score').textContent = score;
+      document.getElementById('spell-combo').textContent =
+        combo > 2 ? `🔥 Combo x${combo} (+${points - 10} bonus)` : '';
+
+      letterIdx++;
+      if (letterIdx >= word.length) {
+        // Palabra completada
+        const timeMs = Date.now() - wordStartMs;
+        const bonus  = Math.max(0, 30 - Math.floor(timeMs / 1000)) * 2;
+        score += 50 + bonus;
+        document.getElementById('spell-score').textContent = score;
+        showToast(`¡"${word}" completada! +${50 + bonus} puntos`, true);
+
+        // Marcar en lista
+        const el = document.getElementById(`wl-${wordIdx}`);
+        if (el) el.classList.add('done');
+
+        wordIdx++;
+        setTimeout(renderWord, 800);
+        buildWordList();
+        return;
+      }
+
+      document.getElementById('spell-target').textContent = word[letterIdx];
+      updateWordDisplay();
+      const bar = document.getElementById('score-bar');
+      bar.style.width = '0%'; bar.className = 'score-bar';
+      document.getElementById('score-pct').textContent = '0%';
+    }
+
+    function showResult() {
+      const elapsed = Math.round((Date.now() - gameStartMs) / 1000);
+      document.getElementById('spell-result').textContent =
+        `${words.length} palabras · ${score} puntos · ${Math.floor(elapsed/60)}m ${elapsed%60}s`;
+      document.getElementById('summary-overlay').classList.add('show');
+    }
+
+    function resetGame() {
+      wordIdx = 0; letterIdx = 0; successCount = 0;
+      score = 0; combo = 0; gameStartMs = Date.now();
+      document.getElementById('spell-score').textContent = '0';
+      document.getElementById('spell-combo').textContent = '';
+      document.getElementById('summary-overlay').classList.remove('show');
+      buildWordList();
+      renderWord();
+    }
+
+    // ── Toast ──────────────────────────────────────────────────────────────
+    function showToast(msg, ok = true) {
+      const t = document.getElementById('toast');
+      t.className = 'toast' + (ok ? '' : ' err');
+      document.getElementById('toast-icon').textContent = ok ? '✓' : '✗';
+      document.getElementById('toast-msg').textContent  = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ── Cambio de país ─────────────────────────────────────────────────────
+    async function switchCountry(btn) {
+      const country = btn.dataset.country;
+      if (country === currentCountry) return;
+      document.getElementById('switch-overlay').classList.add('on');
+      document.getElementById('switch-text').textContent = `Cargando ${btn.dataset.name}…`;
+      try {
+        const res  = await fetch('/set_country', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({country})
+        });
+        const data = await res.json();
+        if (data.ok) { showToast(`${data.flag} ${data.name}`, true); setTimeout(() => location.reload(), 1200); }
+        else showToast(data.error || 'Error', false);
+      } catch (_) { showToast('Error de conexión', false); }
+      finally { document.getElementById('switch-overlay').classList.remove('on'); }
+    }
+
+    buildWordList();
+    renderWord();
+  </script>
+</body>
+</html>

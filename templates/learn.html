@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aprende — Sign.Detect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/learn.css') }}">
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">🤟</div>
+      <div class="logo-copy">
+        <div class="logo-title">Sign.Detect</div>
+        <div class="logo-sub">Modo Aprendizaje</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <a href="/" class="nav-link">← Detector</a>
+      <a href="/dashboard" class="nav-link">📊 Progreso</a>
+      <a href="/spell" class="nav-link">✏️ Deletrear</a>
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        <span id="session-timer">00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+
+      <!-- Flash card con estrellas -->
+      <div class="sidebar-block">
+        <div class="block-label">Letra actual</div>
+        <div class="flash-card">
+          <div class="flash-stars" id="flash-stars">
+            <span class="star" id="star-2">★</span>
+            <span class="star" id="star-1">★</span>
+            <span class="star" id="star-0">★</span>
+          </div>
+          <div class="flash-letter" id="flash-letter">{{ letters[0] }}</div>
+          <div class="flash-progress" id="flash-progress">1 / {{ letters|length }}</div>
+        </div>
+      </div>
+
+      <!-- Score -->
+      <div class="sidebar-block">
+        <div class="block-label">Tu similitud</div>
+        <div class="score-row">
+          <div class="score-bar-wrap">
+            <div class="score-bar" id="score-bar"></div>
+          </div>
+          <div class="score-pct" id="score-pct">0%</div>
+        </div>
+        <div class="feedback-text" id="feedback-text">Coloca tu mano frente a la cámara</div>
+      </div>
+
+      <!-- Racha + nav -->
+      <div class="sidebar-block">
+        <div class="block-label">Racha</div>
+        <div class="success-strip" id="success-strip">
+          {% for i in range(7) %}
+          <div class="s-dot" id="dot-{{ i }}"></div>
+          {% endfor %}
+        </div>
+        <div class="nav-btns" style="margin-top:14px">
+          <button class="lrn-btn" onclick="prevLetter()">← Anterior</button>
+          <button class="lrn-btn primary" onclick="skipLetter()">Saltar →</button>
+        </div>
+      </div>
+
+      <!-- Pista -->
+      <div class="sidebar-block">
+        <div class="block-label">Pista</div>
+        <button class="hint-btn" id="hint-btn" onclick="showHint()">
+          💡 Ver posición de mano
+        </button>
+        <div class="hint-meta" id="hint-meta">Usa hasta 2 pistas · −1 ⭐ por uso</div>
+      </div>
+
+      <!-- Idioma -->
+      <div class="sidebar-block">
+        <div class="block-label">Idioma de señas</div>
+        <div class="country-list">
+          {% for key, meta in countries.items() %}
+          <button
+            class="country-btn {% if key == current_country %}active{% endif %}"
+            data-country="{{ key }}" data-name="{{ meta.name }}" data-flag="{{ meta.flag }}"
+            {% if not meta.available %}disabled{% endif %}
+            onclick="switchCountry(this)">
+            <span class="c-flag">{{ meta.flag }}</span>
+            <span class="c-info"><span class="c-name">{{ meta.name }}</span></span>
+            {% if meta.available %}<span class="c-badge badge-ok">listo</span>
+            {% else %}<span class="c-badge badge-none">sin modelo</span>{% endif %}
+            {% if key == current_country %}<span class="c-active-dot"></span>{% endif %}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Terminar sesión -->
+      <div class="sidebar-block">
+        <button class="lrn-btn end-btn" onclick="endSession()">⏹ Terminar sesión</button>
+      </div>
+
+    </aside>
+
+    <!-- VIDEO -->
+    <section class="video-area">
+      <div class="video-wrap">
+        <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+        <div class="video-frame">
+          <div class="hud">
+            <span class="hud-flag" id="hud-flag">{{ countries[current_country].flag }}</span>
+            <span class="hud-name" id="hud-name">{{ countries[current_country].name }}</span>
+          </div>
+          <div class="v-overlay" id="loading-overlay">
+            <div class="spin"></div>
+            <div class="v-overlay-text">Iniciando cámara…</div>
+          </div>
+          <div class="v-switch" id="switch-overlay">
+            <div class="spin"></div>
+            <div class="v-switch-text" id="switch-text">Cargando modelo…</div>
+          </div>
+          <img src="{{ url_for('video_feed') }}" alt="Cámara"
+               onload="document.getElementById('loading-overlay').classList.add('gone')">
+        </div>
+      </div>
+      <div class="meta-bar">
+        <div class="tag">🎥 <span>cámara 0 · espejo</span></div>
+        <div class="tag">modelo: <span id="active-country-label" class="accent-val">{{ current_country }}</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>SIGN.DETECT — Modo Aprendizaje</span>
+    <div class="stack">
+      <span>MediaPipe</span><div class="sep"></div>
+      <span>RandomForest</span><div class="sep"></div>
+      <span>Flask</span>
+    </div>
+  </footer>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast">
+    <span class="toast-icon" id="toast-icon">✓</span>
+    <span id="toast-msg">¡Correcto!</span>
+  </div>
+
+  <!-- POPUP DE PISTA -->
+  <div class="hint-overlay" id="hint-overlay" onclick="closeHint()">
+    <div class="hint-popup" onclick="event.stopPropagation()">
+      <div class="hint-popup-title">Posición de referencia: <span id="hint-letter-label">A</span></div>
+      <canvas id="hint-canvas" width="240" height="200"></canvas>
+      <div class="hint-popup-note" id="hint-popup-note">−1 ⭐ aplicado</div>
+      <button class="lrn-btn primary" onclick="closeHint()" style="margin-top:10px">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- MODAL RESUMEN DE SESIÓN -->
+  <div class="summary-overlay" id="summary-overlay">
+    <div class="summary-modal">
+      <div class="summary-title" id="summary-title">Sesión completada 🎉</div>
+      <div class="summary-time" id="summary-time"></div>
+      <div class="summary-stars-grid">
+        <div class="summary-star-item">
+          <div class="summary-star-count" id="s-count-3">0</div>
+          <div class="summary-star-label">⭐⭐⭐</div>
+        </div>
+        <div class="summary-star-item">
+          <div class="summary-star-count" id="s-count-2">0</div>
+          <div class="summary-star-label">⭐⭐</div>
+        </div>
+        <div class="summary-star-item">
+          <div class="summary-star-count" id="s-count-1">0</div>
+          <div class="summary-star-label">⭐</div>
+        </div>
+        <div class="summary-star-item">
+          <div class="summary-star-count" id="s-count-0">0</div>
+          <div class="summary-star-label">—</div>
+        </div>
+      </div>
+      <div class="summary-best" id="summary-best"></div>
+      <div class="summary-worst" id="summary-worst"></div>
+      <div class="summary-actions">
+        <button class="lrn-btn" onclick="location.href='/dashboard'">📊 Ver progreso</button>
+        <button class="lrn-btn primary" onclick="location.reload()">Nueva sesión</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const letters = {{ letters | tojson }};
+    let currentIdx   = 0;
+    let currentCountry = '{{ current_country }}';
+    let successCount = 0;
+    let hintsUsed    = 0;      // pistas usadas en letra actual
+    let letterStars  = 3;      // estrellas actuales letra
+    let autoAdvancing = false;
+    let letterStartMs = Date.now();
+    const SUCCESS_NEEDED = 7;
+
+    // ── Estado de sesión ──────────────────────────────────────────────────
+    const session = {
+      startMs:  Date.now(),
+      country:  currentCountry,
+      letters:  {}    // { A: {stars, hintsUsed, timeMs, completed} }
+    };
+
+    // ── Timer de sesión ───────────────────────────────────────────────────
+    setInterval(() => {
+      const s = Math.floor((Date.now() - session.startMs) / 1000);
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      document.getElementById('session-timer').textContent = `${mm}:${ss}`;
+    }, 1000);
+
+    // ── Flash card ────────────────────────────────────────────────────────
+    function renderCard() {
+      document.getElementById('flash-letter').textContent = letters[currentIdx];
+      document.getElementById('flash-progress').textContent =
+        `${currentIdx + 1} / ${letters.length}`;
+      successCount  = 0;
+      hintsUsed     = 0;
+      letterStars   = 3;
+      autoAdvancing = false;
+      letterStartMs = Date.now();
+      resetDots();
+      updateStars();
+      document.getElementById('hint-btn').disabled = false;
+      document.getElementById('hint-meta').textContent = 'Usa hasta 2 pistas · −1 ⭐ por uso';
+      const bar = document.getElementById('score-bar');
+      bar.style.width = '0%'; bar.className = 'score-bar';
+      document.getElementById('score-pct').textContent = '0%';
+      document.getElementById('feedback-text').textContent = 'Coloca tu mano frente a la cámara';
+    }
+
+    function updateStars() {
+      for (let i = 0; i < 3; i++) {
+        const el = document.getElementById(`star-${i}`);
+        el.classList.toggle('filled', i < letterStars);
+      }
+    }
+
+    function prevLetter() {
+      currentIdx = (currentIdx - 1 + letters.length) % letters.length;
+      renderCard();
+    }
+
+    function skipLetter() {
+      // Saltar sin completar → 0 estrellas para esa letra
+      recordLetter(false);
+      currentIdx = (currentIdx + 1) % letters.length;
+      if (currentIdx === 0) { endSession(); return; }
+      renderCard();
+    }
+
+    function completeLetter() {
+      recordLetter(true);
+      autoAdvancing = true;
+      showToast(`¡Dominaste la letra ${letters[currentIdx]}! ${starsEmoji(letterStars)}`, true);
+      setTimeout(() => {
+        currentIdx++;
+        if (currentIdx >= letters.length) { endSession(); return; }
+        renderCard();
+      }, 1200);
+    }
+
+    function recordLetter(completed) {
+      session.letters[letters[currentIdx]] = {
+        stars:     completed ? letterStars : 0,
+        hintsUsed: hintsUsed,
+        timeMs:    Date.now() - letterStartMs,
+        completed
+      };
+    }
+
+    function starsEmoji(n) {
+      return n === 3 ? '⭐⭐⭐' : n === 2 ? '⭐⭐' : n === 1 ? '⭐' : '';
+    }
+
+    // ── Racha ─────────────────────────────────────────────────────────────
+    function resetDots() {
+      for (let i = 0; i < SUCCESS_NEEDED; i++)
+        document.getElementById(`dot-${i}`).classList.remove('filled');
+    }
+    function fillDots(n) {
+      for (let i = 0; i < SUCCESS_NEEDED; i++)
+        document.getElementById(`dot-${i}`).classList.toggle('filled', i < n);
+    }
+
+    // ── Polling de score ──────────────────────────────────────────────────
+    async function updateScore() {
+      if (autoAdvancing) return;
+      try {
+        const res  = await fetch(`/learn/score?letter=${letters[currentIdx]}`);
+        const data = await res.json();
+        const pct  = Math.round((data.score || 0) * 100);
+
+        const bar = document.getElementById('score-bar');
+        bar.style.width = pct + '%';
+        bar.className   = 'score-bar' +
+          (pct >= 85 ? ' bar-green' : pct >= 55 ? ' bar-yellow' : ' bar-red');
+        document.getElementById('score-pct').textContent = pct + '%';
+
+        const fb = document.getElementById('feedback-text');
+        if (!data.detected) {
+          fb.textContent = 'Coloca tu mano frente a la cámara';
+          successCount = 0; resetDots();
+        } else if (pct >= 85) {
+          successCount++;
+          fillDots(successCount);
+          fb.textContent = successCount < SUCCESS_NEEDED
+            ? `¡Perfecto! Mantén la pose… (${successCount}/${SUCCESS_NEEDED})`
+            : '¡Excelente! Avanzando…';
+          if (successCount >= SUCCESS_NEEDED) completeLetter();
+        } else if (pct >= 55) {
+          successCount = Math.max(0, successCount - 1);
+          fillDots(successCount);
+          fb.textContent = '¡Casi! Mantén la mano más estable';
+        } else {
+          successCount = 0; resetDots();
+          fb.textContent = pct > 0 ? 'Ajusta la posición'
+                                    : `Intenta la seña "${letters[currentIdx]}"`;
+        }
+      } catch (_) {}
+    }
+    setInterval(updateScore, 200);
+
+    // ── Pista ─────────────────────────────────────────────────────────────
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],
+      [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],
+      [0,17]
+    ];
+
+    async function showHint() {
+      if (hintsUsed >= 2) return;
+      const letter = letters[currentIdx];
+      try {
+        const res  = await fetch(`/learn/hint/${letter}`);
+        const data = await res.json();
+        if (!data.ok) { showToast('Sin datos de referencia para esta letra', false); return; }
+
+        hintsUsed++;
+        letterStars = Math.max(1, letterStars - 1);
+        updateStars();
+
+        const btn = document.getElementById('hint-btn');
+        const meta = document.getElementById('hint-meta');
+        if (hintsUsed >= 2) { btn.disabled = true; meta.textContent = 'Sin pistas disponibles'; }
+        else { meta.textContent = `Pista ${hintsUsed}/2 usada · queda 1`; }
+
+        document.getElementById('hint-letter-label').textContent = letter;
+        document.getElementById('hint-popup-note').textContent =
+          `−1 ⭐ aplicado · Estrellas restantes: ${letterStars}`;
+        drawHand(data.points);
+        document.getElementById('hint-overlay').classList.add('show');
+      } catch (_) { showToast('Error cargando pista', false); }
+    }
+
+    function closeHint() {
+      document.getElementById('hint-overlay').classList.remove('show');
+    }
+
+    function drawHand(points) {
+      const canvas = document.getElementById('hint-canvas');
+      const ctx    = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const xs = points.map(p => p.x), ys = points.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const rX = maxX - minX || 1, rY = maxY - minY || 1;
+      const pad = 24;
+
+      function px(p) {
+        return {
+          x: pad + ((p.x - minX) / rX) * (W - 2 * pad),
+          y: pad + ((p.y - minY) / rY) * (H - 2 * pad)
+        };
+      }
+
+      ctx.strokeStyle = '#01f50d'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
+      for (const [a, b] of HAND_CONNECTIONS) {
+        const pa = px(points[a]), pb = px(points[b]);
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      }
+
+      ctx.fillStyle = '#01f50d'; ctx.globalAlpha = 1;
+      for (const p of points) {
+        const {x, y} = px(p);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // ── Fin de sesión ─────────────────────────────────────────────────────
+    function endSession() {
+      autoAdvancing = true;
+      const elapsed  = Date.now() - session.startMs;
+      const entries  = Object.values(session.letters);
+      const done     = entries.filter(l => l.completed);
+      const c3 = done.filter(l => l.stars === 3).length;
+      const c2 = done.filter(l => l.stars === 2).length;
+      const c1 = done.filter(l => l.stars === 1).length;
+      const c0 = entries.filter(l => !l.completed).length +
+                 done.filter(l => l.stars === 0).length;
+
+      const s = Math.floor(elapsed / 1000);
+      document.getElementById('summary-time').textContent =
+        `Duración: ${Math.floor(s/60)}m ${s%60}s · ${done.length}/${letters.length} letras completadas`;
+      document.getElementById('s-count-3').textContent = c3;
+      document.getElementById('s-count-2').textContent = c2;
+      document.getElementById('s-count-1').textContent = c1;
+      document.getElementById('s-count-0').textContent = c0;
+
+      const best3 = done.filter(l => l.stars === 3).slice(0, 5)
+                        .map((_, i) => Object.keys(session.letters)[i]).join(', ');
+      const hardest = entries.sort((a,b) => (b.timeMs||0) - (a.timeMs||0))
+                             .slice(0,3)
+                             .map(l => Object.keys(session.letters)
+                                             .find(k => session.letters[k] === l))
+                             .filter(Boolean).join(', ');
+
+      document.getElementById('summary-best').textContent =
+        c3 > 0 ? `Letras perfectas: ${Object.keys(session.letters).filter(k => session.letters[k].stars===3).join(', ')}` : '';
+      document.getElementById('summary-worst').textContent =
+        hardest ? `Más difíciles: ${hardest}` : '';
+
+      saveSession();
+      document.getElementById('summary-overlay').classList.add('show');
+    }
+
+    function saveSession() {
+      const history = JSON.parse(localStorage.getItem('signdetect_history') || '[]');
+      history.push({
+        date:        new Date().toISOString(),
+        country:     session.country,
+        duration_ms: Date.now() - session.startMs,
+        letters:     session.letters
+      });
+      localStorage.setItem('signdetect_history', JSON.stringify(history));
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────
+    function showToast(msg, ok = true) {
+      const t = document.getElementById('toast');
+      t.className = 'toast' + (ok ? '' : ' err');
+      document.getElementById('toast-icon').textContent  = ok ? '✓' : '✗';
+      document.getElementById('toast-msg').textContent   = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    // ── Cambio de país ────────────────────────────────────────────────────
+    async function switchCountry(btn) {
+      const country = btn.dataset.country;
+      if (country === currentCountry) return;
+      const overlay = document.getElementById('switch-overlay');
+      document.getElementById('switch-text').textContent = `Cargando modelo ${btn.dataset.name}…`;
+      overlay.classList.add('on');
+      try {
+        const res  = await fetch('/set_country', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({country})
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`${data.flag} ${data.name} cargado`, true);
+          setTimeout(() => location.reload(), 1200);
+        } else {
+          showToast(data.error || 'Error', false);
+        }
+      } catch (_) { showToast('Error de conexión', false); }
+      finally     { overlay.classList.remove('on'); }
+    }
+
+    renderCard();
+  </script>
+</body>
+</html>

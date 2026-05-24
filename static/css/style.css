@@ -587,6 +587,25 @@ footer .sep {
 
 .toast-icon { font-size: 14px; }
 
+/* ── NAV LINK (compartido entre index y learn) ──── */
+.nav-link {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  text-decoration: none;
+  padding: 5px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  background: var(--surface);
+  letter-spacing: 0.06em;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.nav-link:hover {
+  color: var(--text);
+  border-color: var(--border3);
+}
+
 /* ── RESPONSIVE ─────────────────────────────────── */
 @media (max-width: 740px) {
   main {

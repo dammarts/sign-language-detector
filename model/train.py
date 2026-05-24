@@ -2,11 +2,11 @@
 Uso:
     python model/train.py                    # entrena con datos ASL base
     python model/train.py --country colombia # entrena modelo Colombia
-    python model/train.py --country asl      # entrena modelo ASL
-    python model/train.py --country mexico   # entrena modelo México
+    python model/train.py --country china    # entrena modelo China
 """
 import argparse
 import pickle
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -15,40 +15,18 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-COUNTRY_DATA = {
-    'asl': {
-        'sources': [
-            BASE_DIR / 'data' / 'archive' / 'asl_landmarks_final.csv',
-            BASE_DIR / 'data' / 'asl' / 'landmarks.csv',
-        ],
-        'label': 'ASL (Estados Unidos)',
-    },
-    'colombia': {
-        'sources': [
-            BASE_DIR / 'data' / 'colombia' / 'landmarks.csv',
-        ],
-        'label': 'Colombia',
-    },
-    'china': {
-        'sources': [
-            BASE_DIR / 'data' / 'china' / 'landmarks.csv',
-        ],
-        'label': 'China',
-    },
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import COUNTRIES, DATA_SOURCES, MODEL_BASE
 
 
 def train(country: str):
-    if country not in COUNTRY_DATA:
-        raise ValueError(f"País '{country}' no registrado. Opciones: {list(COUNTRY_DATA.keys())}")
+    if country not in COUNTRIES:
+        raise ValueError(f"País '{country}' no registrado. Opciones: {list(COUNTRIES.keys())}")
 
-    config = COUNTRY_DATA[country]
-    print(f"\n=== Entrenando modelo: {config['label']} ===\n")
+    print(f"\n=== Entrenando modelo: {COUNTRIES[country]['name']} ===\n")
 
     dfs = []
-    for path in config['sources']:
+    for path in DATA_SOURCES[country]:
         if path.exists():
             df_part = pd.read_csv(path)
             print(f"  Cargado: {path.name} → {len(df_part)} filas")
@@ -82,7 +60,7 @@ def train(country: str):
     print(f"\n  Accuracy: {accuracy_score(y_test, y_pred):.4f}")
     print(classification_report(y_test, y_pred, target_names=le.classes_))
 
-    out_dir = BASE_DIR / 'model' / country
+    out_dir = MODEL_BASE / country
     out_dir.mkdir(parents=True, exist_ok=True)
 
     with open(out_dir / 'classifier.pkl', 'wb') as f:
@@ -96,7 +74,7 @@ def train(country: str):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Entrenar modelo de lenguaje de señas')
     parser.add_argument('--country', default='asl',
-                        choices=list(COUNTRY_DATA.keys()),
+                        choices=list(COUNTRIES.keys()),
                         help='País / lengua de señas a entrenar')
     args = parser.parse_args()
     train(args.country)
