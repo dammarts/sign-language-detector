@@ -256,6 +256,11 @@
         const {x, y} = px(lm);
         ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
       }
+      if (data.label) {
+        ctx.font = 'bold 80px monospace';
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillText(data.label, 40, 130);
+      }
     }
 
     // ── Estado de aprendizaje ─────────────────────────────────────────────
