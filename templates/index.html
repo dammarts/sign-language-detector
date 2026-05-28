@@ -28,7 +28,16 @@
     </div>
     <div class="header-right">
       <a href="/learn" class="nav-link">Aprender →</a>
-      <!-- 3️⃣  Botón del toggle — ponlo donde quieras en el header -->
+      <a href="/training" class="nav-link">🎯 Training Studio</a>
+      {% if current_user %}
+        <span class="nav-user">👤 {{ current_user.username }}</span>
+        <form action="/logout" method="post" style="display:inline">
+          <button type="submit" class="nav-link nav-link--logout">Salir</button>
+        </form>
+      {% else %}
+        <a href="/login" class="nav-link">Entrar</a>
+        <a href="/register" class="nav-link nav-link--cta">Registrarse</a>
+      {% endif %}
       <button id="theme-toggle" aria-label="Cambiar tema">🌙 Oscuro</button>
       <div class="live-badge">
         <div class="live-dot"></div>
@@ -125,12 +134,11 @@
             <div class="v-switch-text" id="switch-text">Cargando modelo…</div>
           </div>
 
-          <img
-            src="{{ url_for('video_feed') }}"
-            alt="Cámara en vivo"
-            id="video-img"
-            onload="document.getElementById('loading-overlay').classList.add('gone')"
-          >
+          <video id="webcam" autoplay muted playsinline
+                 style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;"></video>
+          <canvas id="overlay"
+                  style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+          <div class="hand-guide"></div>
         </div>
       </div>
 
@@ -165,6 +173,84 @@
   <script>
     let currentCountry = '{{ current_country }}';
 
+    // ── Webcam + predicción ───────────────────────────────────────────────
+    const video   = document.getElementById('webcam');
+    const canvas  = document.getElementById('overlay');
+    const ctx     = canvas.getContext('2d');
+    let _capCv    = null;
+
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20],[0,17]
+    ];
+
+    navigator.mediaDevices.getUserMedia({video: true, audio: false})
+      .then(stream => {
+        video.srcObject = stream;
+        const hideOverlay = () => {
+          canvas.width  = video.videoWidth  || 640;
+          canvas.height = video.videoHeight || 480;
+          document.getElementById('loading-overlay').classList.add('gone');
+        };
+        ['loadedmetadata', 'loadeddata', 'canplay', 'playing'].forEach(e =>
+          video.addEventListener(e, hideOverlay, {once: true})
+        );
+        if (video.readyState >= 2) hideOverlay();
+      })
+      .catch(() => {
+        const ol = document.getElementById('loading-overlay');
+        ol.querySelector('.v-overlay-text').textContent = 'No se pudo acceder a la cámara';
+      });
+
+    async function captureAndPredict(letter = '') {
+      if (!video.videoWidth) return null;
+      if (!_capCv) _capCv = document.createElement('canvas');
+      _capCv.width  = 640;
+      _capCv.height = 480;
+      _capCv.getContext('2d').drawImage(video, 0, 0, 640, 480);
+      const b64 = _capCv.toDataURL('image/jpeg', 0.7).split(',')[1];
+      const res = await fetch('/predict', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({frame: b64, letter})
+      });
+      return await res.json();
+    }
+
+    const handGuide = document.querySelector('.hand-guide');
+
+    function drawOverlay(data) {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      handGuide.classList.toggle('visible', !!(data && data.detected));
+      if (!data || !data.detected || !data.landmarks) return;
+
+      function px(lm) { return {x: (1 - lm.x) * W, y: lm.y * H}; }
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 2;
+      for (const [a, b] of HAND_CONNECTIONS) {
+        const pa = px(data.landmarks[a]), pb = px(data.landmarks[b]);
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      }
+      ctx.fillStyle = '#ff4444';
+      for (const lm of data.landmarks) {
+        const {x, y} = px(lm);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      }
+      if (data.label) {
+        ctx.font = 'bold 80px monospace';
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillText(data.label, 40, 130);
+      }
+    }
+
+    setInterval(async () => {
+      try { drawOverlay(await captureAndPredict()); } catch(_) {}
+    }, 200);
+
+    // ── UI helpers ────────────────────────────────────────────────────────
     function showToast(msg, ok = true) {
       const t     = document.getElementById('toast');
       const icon  = document.getElementById('toast-icon');

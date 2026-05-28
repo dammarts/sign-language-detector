@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Training Studio — Sign.Detect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    /* 3-column layout */
+    main { grid-template-columns: 255px 1fr 270px; overflow: hidden; }
+
+    /* ── LEFT SIDEBAR ── */
+    .sb-sec {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sb-sec:last-child { border-bottom: none; }
+
+    .s-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .15em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .s-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border2);
+    }
+
+    /* Stats row */
+    .stat-chips {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+    }
+    .stat-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 4px;
+      text-align: center;
+    }
+    .stat-chip-val {
+      font-family: var(--sans);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .stat-chip-lbl {
+      font-family: var(--mono);
+      font-size: 7.5px;
+      color: var(--text3);
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    /* Letter grid */
+    .ts-letter-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+    }
+    .ts-btn {
+      aspect-ratio: 1;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text3);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .12s;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .ts-btn:hover { background: var(--surface3); color: var(--text); }
+    .ts-btn.active {
+      background: rgba(1,245,13,.18);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 10px rgba(1,245,13,.2);
+    }
+    .ts-btn.done {
+      background: rgba(1,245,13,.07);
+      border-color: rgba(1,245,13,.22);
+      color: rgba(1,245,13,.65);
+    }
+    .ts-btn.partial {
+      background: rgba(255,200,0,.04);
+      border-color: rgba(255,200,0,.18);
+      color: rgba(255,200,0,.65);
+    }
+    .ts-btn .tb-pct {
+      font-size: 6px;
+      line-height: 1;
+      color: var(--text3);
+      font-family: var(--mono);
+    }
+    .ts-btn.done .tb-pct { color: rgba(1,245,13,.5); }
+    .ts-btn.partial .tb-pct { color: rgba(255,200,0,.5); }
+
+    /* Session log */
+    .sl-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--text3);
+      padding: 3px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .sl-item:last-child { border-bottom: none; }
+    .sl-l { color: var(--accent); font-weight: 700; }
+
+    /* Keyboard hints */
+    .kbd {
+      display: inline-block;
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text2);
+    }
+
+    /* ── CENTER ── */
+    .ts-center {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 14px;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    /* ── COMPACT CONTROL BAR ── */
+    .ctrl-bar {
+      flex-shrink: 0;
+      height: 66px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0 14px;
+    }
+
+    /* Big letter badge */
+    .cb-letter {
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: var(--accent);
+      font-family: var(--sans);
+      line-height: 1;
+      min-width: 48px;
+      text-align: center;
+      text-shadow: 0 0 18px rgba(1,245,13,.35);
+      flex-shrink: 0;
+    }
+
+    /* Divider */
+    .cb-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border2);
+      flex-shrink: 0;
+    }
+
+    /* Progress section */
+    .cb-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 110px;
+      flex-shrink: 0;
+    }
+    .cb-status {
+      font-family: var(--mono);
+      font-size: 8.5px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+    .cb-bar-wrap {
+      background: var(--surface3);
+      border-radius: 3px;
+      height: 5px;
+      overflow: hidden;
+    }
+    .cb-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width .2s;
+    }
+    .cb-count {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text2);
+    }
+
+    /* Status badges */
+    .cb-badges {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+    .det-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      white-space: nowrap;
+    }
+    .det-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--surface3);
+      flex-shrink: 0;
+      transition: background .2s;
+    }
+    .det-dot.on { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+
+    .pred-chip {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      white-space: nowrap;
+    }
+    .pred-chip .pv { font-weight: 700; color: var(--text2); }
+    .pred-chip .pv.match { color: var(--accent); }
+    .pred-chip .pv.wrong { color: var(--danger); }
+
+    .auto-lbl {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .auto-lbl input { cursor: pointer; accent-color: var(--accent); }
+
+    /* Buttons */
+    .cb-btns {
+      display: flex;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .h-btn {
+      padding: 6px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--text2);
+      font-family: var(--mono);
+      font-size: 10.5px;
+      cursor: pointer;
+      transition: all .12s;
+      white-space: nowrap;
+    }
+    .h-btn:hover { background: var(--surface3); color: var(--text); }
+    .h-btn.cap-on {
+      background: rgba(1,245,13,.14);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .h-btn:disabled { opacity: .35; cursor: default; }
+    .h-btn.accent-border { border-color: rgba(1,245,13,.3); color: rgba(1,245,13,.8); }
+    .h-btn--danger { border-color: rgba(240,96,96,.35); color: rgba(240,96,96,.75); }
+    .h-btn--danger:hover { background: rgba(240,96,96,.12); border-color: var(--danger); color: var(--danger); }
+
+    /* ── CAMERA AREA ── */
+    .cam-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    /* Mirror .video-area exactly so video-wrap behaves identically */
+    .cam-inner {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 28px;
+      overflow: hidden;
+      position: relative;
+    }
+    #capture-flash {
+      position: absolute;
+      inset: 0;
+      background: rgba(1,245,13,.07);
+      opacity: 0;
+      pointer-events: none;
+      border-radius: 6px;
+      transition: opacity .07s;
+      z-index: 4;
+    }
+
+    /* ── RIGHT PANEL ── */
+    .ts-right {
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .rp-sec {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px;
+    }
+
+    /* Ref image */
+    .ref-img {
+      width: 100%;
+      border-radius: 6px;
+      object-fit: contain;
+      max-height: 165px;
+      background: var(--surface3);
+      display: block;
+    }
+    .ref-placeholder {
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface3);
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+    }
+
+    /* Quality */
+    .oq-wrap {
+      text-align: center;
+      padding: 4px 0 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+    .oq-lbl {
+      font-family: var(--mono);
+      font-size: 8px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      margin-bottom: 2px;
+    }
+    .oq-score {
+      font-family: var(--sans);
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--text3);
+      transition: color .3s;
+    }
+    .oq-score.good { color: var(--accent); text-shadow: 0 0 20px rgba(1,245,13,.3); }
+    .oq-score.mid  { color: #ffc800; }
+    .oq-score.bad  { color: var(--danger); }
+
+    .q-row { margin-bottom: 8px; }
+    .q-row:last-child { margin-bottom: 0; }
+    .q-head {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text3);
+      margin-bottom: 3px;
+    }
+    .q-head .qv { color: var(--text2); font-weight: 600; }
+    .q-bar-wrap {
+      background: var(--surface3);
+      border-radius: 3px;
+      height: 5px;
+      overflow: hidden;
+    }
+    .q-bar {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .3s, background .3s;
+      width: 0%;
+    }
+    .q-bar.good { background: var(--accent); }
+    .q-bar.mid  { background: #ffc800; }
+    .q-bar.bad  { background: var(--danger); }
+
+    /* Tips */
+    .tip-body {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--text2);
+      line-height: 1.65;
+    }
+    .tip-body strong { color: var(--accent); font-size: 12px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">🎯</div>
+      <div class="logo-copy">
+        <div class="logo-title">Sign.Detect</div>
+        <div class="logo-sub">Training Studio</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <a href="/" class="nav-link">← Detector</a>
+      <a href="/capture" class="nav-link">📸 Captura rápida</a>
+      <a href="/learn" class="nav-link">🤟 Aprender</a>
+      {% if current_user %}
+        <span class="nav-user">👤 {{ current_user.username }}</span>
+        <form action="/logout" method="post" style="display:inline">
+          <button type="submit" class="nav-link nav-link--logout">Salir</button>
+        </form>
+      {% else %}
+        <a href="/login" class="nav-link">Entrar</a>
+        <a href="/register" class="nav-link nav-link--cta">Registrarse</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── LEFT SIDEBAR ── -->
+    <aside class="sidebar">
+
+      <div class="sb-sec">
+        <div class="stat-chips">
+          <div class="stat-chip">
+            <div class="stat-chip-val" id="st-done">0</div>
+            <div class="stat-chip-lbl">Listas</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-val" id="st-sess">0</div>
+            <div class="stat-chip-lbl">Sesión</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-val" id="st-total">0</div>
+            <div class="stat-chip-lbl">Total</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-sec">
+        <div class="s-label">Progreso global</div>
+        <div style="text-align:center;padding:4px 0">
+          <svg viewBox="0 0 100 100" width="86" height="86" style="display:block;margin:0 auto">
+            <circle cx="50" cy="50" r="38" fill="none" stroke="var(--surface3)" stroke-width="9"/>
+            <circle id="ring-arc" cx="50" cy="50" r="38" fill="none"
+                    stroke="#01f50d" stroke-width="9"
+                    stroke-linecap="round"
+                    stroke-dasharray="0 239"
+                    transform="rotate(-90 50 50)"
+                    style="transition:stroke-dasharray .4s ease"/>
+            <text x="50" y="47" text-anchor="middle"
+                  font-family="Syne,sans-serif" font-size="20" font-weight="800"
+                  fill="#01f50d" id="ring-num">0</text>
+            <text x="50" y="60" text-anchor="middle"
+                  font-family="Fira Code,monospace" font-size="7"
+                  fill="#4e5468">/ 26 letras</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="sb-sec">
+        <div class="s-label">Idioma</div>
+        <div class="country-list">
+          {% for key, meta in countries.items() %}
+          <button
+            class="country-btn {% if key == current_country %}active{% endif %}"
+            onclick="switchCountry('{{ key }}')"
+            {% if not meta.available %}disabled title="Sin modelo"{% endif %}>
+            <span class="country-flag">{{ meta.flag }}</span>
+            <span class="country-name">{{ meta.name }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="sb-sec">
+        <div class="s-label">Letras — clic para seleccionar</div>
+        <div class="ts-letter-grid" id="letter-grid"></div>
+      </div>
+
+      <div class="sb-sec">
+        <div class="s-label">Registro de sesión</div>
+        <div id="session-log">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Sin capturas aún</div>
+        </div>
+      </div>
+
+      <div class="sb-sec">
+        <div class="s-label">Atajos de teclado</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px">
+          <span class="kbd">A – Z</span>
+          <span class="kbd">Espacio</span>
+          <span class="kbd">→</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);line-height:1.8">
+          Seleccionar · Iniciar/pausar · Siguiente
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── CENTER ── -->
+    <section class="ts-center">
+
+      <!-- Compact control bar -->
+      <div class="ctrl-bar">
+
+        <div class="cb-letter" id="hero-letter">—</div>
+        <div class="cb-divider"></div>
+
+        <div class="cb-progress">
+          <div class="cb-status" id="hero-status">SELECCIONA UNA LETRA</div>
+          <div class="cb-bar-wrap">
+            <div class="cb-bar" id="h-bar" style="width:0%"></div>
+          </div>
+          <div class="cb-count" id="h-bar-txt">0 / 300</div>
+        </div>
+
+        <div class="cb-divider"></div>
+
+        <div class="cb-badges">
+          <div class="det-badge">
+            <div class="det-dot" id="det-dot"></div>
+            <span id="det-txt">Sin mano</span>
+          </div>
+          <div class="pred-chip">
+            ve: <span class="pv" id="pred-val">—</span>
+          </div>
+          <label class="auto-lbl">
+            <input type="checkbox" id="auto-adv" checked> Auto
+          </label>
+        </div>
+
+        <div class="cb-divider"></div>
+
+        <div class="cb-btns">
+          <button class="h-btn accent-border" id="cap-btn" onclick="toggleCapture()" disabled>
+            ▶ Capturar
+          </button>
+          <button class="h-btn" id="next-btn" onclick="nextLetter()" disabled>Sig →</button>
+          <button class="h-btn" onclick="goWeakest()" title="Letra con menos muestras">🎯</button>
+          <button class="h-btn h-btn--danger" id="reset-btn" onclick="resetLetter()" disabled title="Borrar todas las muestras de esta letra">🗑 Reiniciar</button>
+        </div>
+
+      </div>
+
+      <!-- Camera — fills remaining height -->
+      <div class="cam-wrap">
+        <div class="cam-inner">
+          <div class="video-wrap">
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+            <div class="video-frame">
+              <div class="v-overlay" id="loading-overlay">
+                <div class="spin"></div>
+                <div class="v-overlay-text">Iniciando cámara…</div>
+              </div>
+              <video id="webcam" autoplay muted playsinline
+                     style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;"></video>
+              <canvas id="overlay"
+                      style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+              <div class="hand-guide" id="hand-guide"></div>
+              <div id="capture-flash"></div>
+            </div>
+          </div>
+        </div>
+        <div class="meta-bar" style="max-width:none">
+          <div class="tag">🎯 <span>Training Studio</span></div>
+          <div class="tag">FPS: <span class="accent-val" id="fps-val">—</span></div>
+          <div class="tag">Total: <span class="accent-val" id="total-val">0</span> frames</div>
+          <div class="tag">Idioma: <span class="accent-val" id="country-lbl">{{ current_country }}</span></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── RIGHT PANEL ── -->
+    <div class="ts-right">
+
+      <!-- Reference image -->
+      <div class="rp-sec">
+        <div class="s-label">Posición de referencia</div>
+        <div id="ref-container">
+          <div class="ref-placeholder">Selecciona una letra</div>
+        </div>
+      </div>
+
+      <!-- Quality panel -->
+      <div class="rp-sec">
+        <div class="s-label">Calidad de captura</div>
+
+        <div class="oq-wrap">
+          <div class="oq-lbl">Puntuación general</div>
+          <div class="oq-score" id="oq-score">—</div>
+        </div>
+
+        <div class="q-row">
+          <div class="q-head">
+            <span>Confianza del modelo</span>
+            <span class="qv" id="qv-conf">—</span>
+          </div>
+          <div class="q-bar-wrap"><div class="q-bar" id="qb-conf"></div></div>
+        </div>
+
+        <div class="q-row">
+          <div class="q-head">
+            <span>Estabilidad de mano</span>
+            <span class="qv" id="qv-stab">—</span>
+          </div>
+          <div class="q-bar-wrap"><div class="q-bar" id="qb-stab"></div></div>
+        </div>
+
+        <div class="q-row">
+          <div class="q-head">
+            <span>Centrado en guía</span>
+            <span class="qv" id="qv-cent">—</span>
+          </div>
+          <div class="q-bar-wrap"><div class="q-bar" id="qb-cent"></div></div>
+        </div>
+
+        <div class="q-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px">
+          <div class="q-head">
+            <span>Tasa de detección</span>
+            <span class="qv" id="qv-rate">—</span>
+          </div>
+          <div class="q-bar-wrap"><div class="q-bar" id="qb-rate"></div></div>
+        </div>
+      </div>
+
+      <!-- Tips -->
+      <div class="rp-sec">
+        <div class="s-label">💡 Cómo hacerla</div>
+        <div class="tip-body" id="tip-body">
+          Selecciona una letra para ver cómo realizarla correctamente.
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <footer>
+    <span>SIGN.DETECT — Training Studio</span>
+    <div class="stack"><span>MediaPipe</span><div class="sep"></div><span>Flask</span></div>
+  </footer>
+
+  <script>
+  const ALPHABET     = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  const SAMPLES_GOAL = 300;
+  const TICK_MS      = 150;
+  const SAVE_MIN_MS  = 200;
+
+  let currentCountry = '{{ current_country }}';
+  let currentLetter  = null;
+  let counts         = {};
+  let sessionCounts  = {};
+  let capturing      = false;
+  let lastSaveTime   = 0;
+
+  let lmHistory  = [];
+  let detHistory = [];
+  let frameCount = 0;
+  let lastFpsTime = Date.now();
+
+  const video     = document.getElementById('webcam');
+  const canvas    = document.getElementById('overlay');
+  const ctx       = canvas.getContext('2d');
+  const handGuide = document.getElementById('hand-guide');
+
+  const HAND_CONNECTIONS = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [0,9],[9,10],[10,11],[11,12],
+    [0,13],[13,14],[14,15],[15,16],
+    [0,17],[17,18],[18,19],[19,20],
+    [5,9],[9,13],[13,17]
+  ];
+
+  const TIPS = {
+    A: "Puño cerrado. El <strong>pulgar</strong> descansa al lado sobre los dedos (no encima). Muñeca recta, palma hacia adelante.",
+    B: "Los <strong>4 dedos juntos y extendidos</strong> apuntan hacia arriba. El pulgar se dobla cruzando la palma.",
+    C: "Curva toda la mano como si <strong>sostuvieras un vaso</strong>. Los dedos están ligeramente separados formando una C.",
+    D: "El <strong>índice apunta arriba</strong>. Los demás dedos y el pulgar forman un círculo tocándose entre sí.",
+    E: "Todos los dedos se doblan hacia la palma. <strong>Las puntas tocan la palma</strong>, diferente a la A.",
+    F: "Pulgar e índice forman un <strong>círculo O</strong>. Los otros 3 dedos se extienden hacia arriba.",
+    G: "Pulgar e índice <strong>apuntan horizontalmente</strong> hacia un lado como una pistola. El resto cerrado.",
+    H: "Índice y medio <strong>juntos y extendidos horizontalmente</strong>. Los demás dedos cerrados.",
+    I: "Solo el <strong>meñique levantado</strong>. Los demás dedos en puño, pulgar cerrado.",
+    J: "Como la <strong>I</strong>, pero traza una <strong>J en el aire</strong> con el meñique. Letra con movimiento.",
+    K: "El índice apunta arriba. El <strong>medio en diagonal hacia afuera</strong>. El pulgar toca el lado del medio.",
+    L: "Pulgar e índice forman una <strong>L perfecta</strong>. Los otros tres dedos doblados hacia la palma.",
+    M: "El pulgar queda oculto debajo de <strong>3 dedos doblados</strong> (índice, medio, anular). Meñique cerrado.",
+    N: "El pulgar queda debajo de <strong>2 dedos doblados</strong> (índice y medio). Los demás cerrados.",
+    O: "Todos los dedos curvados formando una <strong>O cerrada</strong> con el pulgar. Como sostener algo redondo.",
+    P: "Como la <strong>K</strong> pero la mano entera <strong>apunta hacia abajo</strong>.",
+    Q: "Como la <strong>G</strong> pero la mano entera <strong>apunta hacia abajo</strong>.",
+    R: "El índice y el medio están <strong>cruzados entre sí</strong>. Los otros dedos cerrados.",
+    S: "Puño cerrado. El <strong>pulgar queda encima de los dedos</strong> (diferente a la A donde está al lado).",
+    T: "El <strong>pulgar sale entre</strong> el índice y el medio que están doblados.",
+    U: "Índice y medio <strong>juntos y extendidos</strong> hacia arriba. Anular y meñique doblados.",
+    V: "Índice y medio <strong>separados en V</strong>. Los otros dedos cerrados.",
+    W: "Índice, medio y anular <strong>separados hacia arriba</strong>. Pulgar y meñique cerrados.",
+    X: "El índice está <strong>doblado en gancho</strong>. Los demás dedos en puño.",
+    Y: "El <strong>pulgar y meñique extendidos</strong> (como el gesto de 'te llamo'). Los demás doblados.",
+    Z: "Con el <strong>índice extendido traza una Z</strong> en el aire. Movimiento rápido.",
+  };
+
+  // ── Webcam ─────────────────────────────────────────────────────────────────
+  navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+    .then(stream => {
+      video.srcObject = stream;
+      video.addEventListener('loadeddata', () => {
+        document.getElementById('loading-overlay').style.display = 'none';
+        canvas.width  = video.videoWidth  || 640;
+        canvas.height = video.videoHeight || 480;
+        loop();
+        setInterval(() => {
+          const fps = Math.round(frameCount / ((Date.now() - lastFpsTime) / 1000));
+          document.getElementById('fps-val').textContent = fps;
+          frameCount = 0;
+          lastFpsTime = Date.now();
+        }, 1000);
+      });
+    })
+    .catch(() => {
+      document.getElementById('loading-overlay')
+        .querySelector('.v-overlay-text').textContent = 'No se pudo acceder a la cámara';
+    });
+
+  // ── Letter grid ────────────────────────────────────────────────────────────
+  function buildGrid() {
+    const grid = document.getElementById('letter-grid');
+    grid.innerHTML = '';
+    ALPHABET.forEach(letter => {
+      const btn = document.createElement('button');
+      btn.className = 'ts-btn';
+      btn.id = 'tbtn-' + letter;
+      const lSpan = document.createElement('span');
+      lSpan.textContent = letter;
+      btn.appendChild(lSpan);
+      const pSpan = document.createElement('span');
+      pSpan.className = 'tb-pct';
+      pSpan.id = 'tpct-' + letter;
+      btn.appendChild(pSpan);
+      btn.onclick = () => selectLetter(letter);
+      grid.appendChild(btn);
+    });
+    refreshGrid();
+  }
+
+  function refreshGrid() {
+    let done = 0, total = 0;
+    ALPHABET.forEach(letter => {
+      const btn   = document.getElementById('tbtn-' + letter);
+      const pSpan = document.getElementById('tpct-' + letter);
+      if (!btn) return;
+      const n = counts[letter] || 0;
+      total += n;
+      const pct = Math.min(100, Math.round((n / SAMPLES_GOAL) * 100));
+      pSpan.textContent = pct + '%';
+      btn.classList.remove('done', 'partial', 'active');
+      if (n >= SAMPLES_GOAL) { btn.classList.add('done'); done++; }
+      else if (n > 0)        { btn.classList.add('partial'); }
+      if (letter === currentLetter) btn.classList.add('active');
+    });
+    document.getElementById('st-done').textContent = done;
+    document.getElementById('st-total').textContent = total;
+    document.getElementById('total-val').textContent = total;
+    const circ = 2 * Math.PI * 38;
+    document.getElementById('ring-arc')
+      .setAttribute('stroke-dasharray', `${(done / 26) * circ} ${circ}`);
+    document.getElementById('ring-num').textContent = done;
+  }
+
+  function findWeakest() {
+    let min = Infinity, best = 'A';
+    for (const l of ALPHABET) {
+      const n = counts[l] || 0;
+      if (n < SAMPLES_GOAL && n < min) { min = n; best = l; }
+    }
+    return best;
+  }
+
+  // ── Letter selection ───────────────────────────────────────────────────────
+  function selectLetter(letter) {
+    currentLetter = letter;
+    capturing = false;
+    updateCapBtn();
+    refreshGrid();
+    updateHero();
+    updateRefImg();
+    updateTip();
+    document.getElementById('next-btn').disabled = false;
+    document.getElementById('cap-btn').disabled = false;
+    document.getElementById('reset-btn').disabled = false;
+  }
+
+  async function resetLetter() {
+    if (!currentLetter) return;
+    const n = counts[currentLetter] || 0;
+    const msg = n > 0
+      ? `¿Borrar las ${n} muestras de la letra "${currentLetter}"?\nEsta acción no se puede deshacer.`
+      : `La letra "${currentLetter}" no tiene muestras guardadas.`;
+    if (n === 0 || !confirm(msg)) return;
+
+    try {
+      const res  = await fetch('/capture/reset_letter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: currentLetter, country: currentCountry })
+      });
+      const data = await res.json();
+      if (!data.ok) { alert('Error al borrar las muestras'); return; }
+
+      counts[currentLetter] = 0;
+      // Descontar del total de sesión si aplica
+      if (sessionCounts[currentLetter]) {
+        delete sessionCounts[currentLetter];
+        updateSessionLog();
+      }
+      capturing = false;
+      updateCapBtn();
+      refreshGrid();
+      updateHero();
+    } catch (_) { alert('Error de red al borrar las muestras'); }
+  }
+
+  function nextLetter() {
+    if (!currentLetter) { selectLetter(ALPHABET[0]); return; }
+    selectLetter(ALPHABET[(ALPHABET.indexOf(currentLetter) + 1) % ALPHABET.length]);
+  }
+
+  function goWeakest() { selectLetter(findWeakest()); }
+
+  function updateHero() {
+    document.getElementById('hero-letter').textContent = currentLetter || '—';
+    const n   = counts[currentLetter] || 0;
+    const pct = Math.min(100, (n / SAMPLES_GOAL) * 100);
+    document.getElementById('h-bar').style.width = pct + '%';
+    document.getElementById('h-bar-txt').textContent = `${n} / ${SAMPLES_GOAL}`;
+    document.getElementById('hero-status').textContent = currentLetter
+      ? (n >= SAMPLES_GOAL ? '✓ COMPLETA' : `FALTAN ${SAMPLES_GOAL - n}`)
+      : 'SELECCIONA UNA LETRA';
+  }
+
+  // ── Capture toggle ─────────────────────────────────────────────────────────
+  function toggleCapture() {
+    if (!currentLetter) return;
+    capturing = !capturing;
+    updateCapBtn();
+  }
+
+  function updateCapBtn() {
+    const btn = document.getElementById('cap-btn');
+    btn.disabled = !currentLetter;
+    if (capturing) {
+      btn.textContent = '⏹ Pausar';
+      btn.classList.add('cap-on');
+    } else {
+      btn.textContent = '▶ Capturar';
+      btn.classList.remove('cap-on');
+    }
+  }
+
+  // ── Reference image ────────────────────────────────────────────────────────
+  function updateRefImg() {
+    const c = document.getElementById('ref-container');
+    if (!currentLetter) {
+      c.innerHTML = '<div class="ref-placeholder">Selecciona una letra</div>';
+      return;
+    }
+    c.innerHTML = `<img class="ref-img" src="/hint_img/${currentCountry}/${currentLetter}" alt="${currentLetter}"
+      onerror="this.parentNode.innerHTML='<div class=\\'ref-placeholder\\'>Sin imagen de referencia</div>'">`;
+  }
+
+  // ── Tips ───────────────────────────────────────────────────────────────────
+  function updateTip() {
+    const el = document.getElementById('tip-body');
+    if (!currentLetter) {
+      el.innerHTML = 'Selecciona una letra para ver cómo realizarla correctamente.';
+      return;
+    }
+    el.innerHTML = `<strong>${currentLetter}:</strong> ${TIPS[currentLetter] || 'Sin consejos específicos.'}`;
+  }
+
+  // ── Quality metrics ────────────────────────────────────────────────────────
+  function variance(arr) {
+    if (arr.length < 2) return 0;
+    const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+    return arr.reduce((s, x) => s + (x - mean) ** 2, 0) / arr.length;
+  }
+
+  function computeStability(landmarks) {
+    if (!landmarks) { lmHistory = []; return 0; }
+    lmHistory.push(landmarks.map(lm => ({ x: lm.x, y: lm.y })));
+    if (lmHistory.length > 5) lmHistory.shift();
+    if (lmHistory.length < 2) return 100;
+    let totalVar = 0;
+    for (let i = 0; i < 21; i++) {
+      totalVar += variance(lmHistory.map(f => f[i].x));
+      totalVar += variance(lmHistory.map(f => f[i].y));
+    }
+    return Math.max(0, Math.min(100, 100 - (totalVar / (21 * 2)) * 20000));
+  }
+
+  function computeCentering(landmarks) {
+    if (!landmarks || !landmarks.length) return 0;
+    let inside = 0;
+    for (const lm of landmarks) {
+      if (lm.x >= 0.26 && lm.x <= 0.74 && lm.y >= 0.16 && lm.y <= 0.84) inside++;
+    }
+    return Math.round((inside / landmarks.length) * 100);
+  }
+
+  function updateDetRate(detected) {
+    detHistory.push(detected ? 1 : 0);
+    if (detHistory.length > 20) detHistory.shift();
+    return Math.round(detHistory.reduce((a, b) => a + b, 0) / detHistory.length * 100);
+  }
+
+  function barClass(p) { return p >= 65 ? 'good' : p >= 35 ? 'mid' : 'bad'; }
+
+  function setBar(barId, valId, pct) {
+    const b = document.getElementById(barId);
+    b.style.width = pct + '%';
+    b.className = 'q-bar ' + barClass(pct);
+    document.getElementById(valId).textContent = pct + '%';
+  }
+
+  function updateQualityUI(detected, conf, stab, cent, rate) {
+    if (!detected) {
+      document.getElementById('oq-score').textContent = '—';
+      document.getElementById('oq-score').className = 'oq-score';
+      ['qv-conf','qv-stab','qv-cent','qv-rate'].forEach(id => {
+        document.getElementById(id).textContent = '—';
+      });
+      ['qb-conf','qb-stab','qb-cent','qb-rate'].forEach(id => {
+        const b = document.getElementById(id);
+        b.style.width = '0%'; b.className = 'q-bar';
+      });
+      return;
+    }
+    setBar('qb-conf', 'qv-conf', Math.round(conf * 100));
+    setBar('qb-stab', 'qv-stab', Math.round(stab));
+    setBar('qb-cent', 'qv-cent', cent);
+    setBar('qb-rate', 'qv-rate', rate);
+    const overall = Math.round(conf * 100 * 0.40 + stab * 0.30 + cent * 0.20 + rate * 0.10);
+    const oq = document.getElementById('oq-score');
+    oq.textContent = overall + '%';
+    oq.className = 'oq-score ' + barClass(overall);
+  }
+
+  // ── Session log ────────────────────────────────────────────────────────────
+  function updateSessionLog() {
+    document.getElementById('st-sess').textContent =
+      Object.values(sessionCounts).reduce((a, b) => a + b, 0);
+    const entries = Object.entries(sessionCounts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    const el = document.getElementById('session-log');
+    if (!entries.length) {
+      el.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Sin capturas aún</div>';
+      return;
+    }
+    el.innerHTML = entries.map(([l, n]) => {
+      const pct = Math.min(100, Math.round(((counts[l] || 0) / SAMPLES_GOAL) * 100));
+      return `<div class="sl-item">
+        <span class="sl-l">${l}</span>
+        <span style="color:var(--text3);font-family:var(--mono);font-size:9px">+${n}</span>
+        <span style="color:var(--accent);font-family:var(--mono);font-size:9px">${pct}%</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Main loop ──────────────────────────────────────────────────────────────
+  async function loop() {
+    while (true) {
+      await tick();
+      await new Promise(r => setTimeout(r, TICK_MS));
+    }
+  }
+
+  async function tick() {
+    if (video.readyState < 2) return;
+    const off = document.createElement('canvas');
+    off.width  = video.videoWidth;
+    off.height = video.videoHeight;
+    off.getContext('2d').drawImage(video, 0, 0);
+    const b64 = off.toDataURL('image/jpeg', 0.75).split(',')[1];
+    frameCount++;
+
+    const shouldSave = capturing && currentLetter &&
+                       (counts[currentLetter] || 0) < SAMPLES_GOAL &&
+                       (Date.now() - lastSaveTime) >= SAVE_MIN_MS;
+    try {
+      const res  = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ frame: b64, letter: currentLetter || '' })
+      });
+      const data = await res.json();
+
+      const det = !!(data && data.detected);
+      handGuide.classList.toggle('visible', det);
+      document.getElementById('det-dot').classList.toggle('on', det);
+      document.getElementById('det-txt').textContent = det ? 'Mano ✓' : 'Sin mano';
+
+      const pvEl = document.getElementById('pred-val');
+      if (det && data.label) {
+        pvEl.textContent = data.label;
+        pvEl.className = currentLetter
+          ? ('pv ' + (data.label === currentLetter ? 'match' : 'wrong'))
+          : 'pv';
+      } else {
+        pvEl.textContent = '—'; pvEl.className = 'pv';
+      }
+
+      const conf = det ? (data.score || 0) : 0;
+      const stab = computeStability(det ? data.landmarks : null);
+      const cent = det ? computeCentering(data.landmarks) : 0;
+      const rate = updateDetRate(det);
+      if (currentLetter) updateQualityUI(det, conf, stab, cent, rate);
+
+      drawOverlay(data);
+
+      if (shouldSave && det) {
+        lastSaveTime = Date.now();
+        fetch('/capture/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frame: b64, label: currentLetter, country: currentCountry })
+        }).then(r => r.json()).then(d => {
+          if (!d.saved) return;
+          counts[currentLetter] = (counts[currentLetter] || 0) + 1;
+          sessionCounts[currentLetter] = (sessionCounts[currentLetter] || 0) + 1;
+          refreshGrid();
+          updateHero();
+          updateSessionLog();
+          const fl = document.getElementById('capture-flash');
+          fl.style.opacity = '1';
+          setTimeout(() => { fl.style.opacity = '0'; }, 80);
+          if (document.getElementById('auto-adv').checked &&
+              counts[currentLetter] >= SAMPLES_GOAL) {
+            capturing = false;
+            updateCapBtn();
+            setTimeout(() => nextLetter(), 600);
+          }
+        }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  function drawOverlay(data) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    if (!data || !data.detected || !data.landmarks) return;
+    const px = lm => ({ x: (1 - lm.x) * W, y: lm.y * H });
+    ctx.strokeStyle = 'rgba(1,245,13,0.7)';
+    ctx.lineWidth = 2;
+    for (const [a, b] of HAND_CONNECTIONS) {
+      if (!data.landmarks[a] || !data.landmarks[b]) continue;
+      const pa = px(data.landmarks[a]), pb = px(data.landmarks[b]);
+      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    }
+    ctx.fillStyle = '#01f50d';
+    for (const lm of data.landmarks) {
+      const { x, y } = px(lm);
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // ── Country switch ─────────────────────────────────────────────────────────
+  async function switchCountry(country) {
+    const res  = await fetch('/set_country', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country })
+    });
+    const data = await res.json();
+    if (!data.ok) return;
+    currentCountry = country;
+    document.getElementById('country-lbl').textContent = country;
+    document.querySelectorAll('.country-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.country-btn[onclick="switchCountry('${country}')"]`)
+            ?.classList.add('active');
+    currentLetter = null;
+    capturing = false;
+    updateCapBtn();
+    document.getElementById('hero-letter').textContent = '—';
+    document.getElementById('hero-status').textContent = 'SELECCIONA UNA LETRA';
+    updateRefImg();
+    updateTip();
+    await loadCounts();
+  }
+
+  async function loadCounts() {
+    try {
+      const res  = await fetch('/capture/counts?country=' + currentCountry);
+      const data = await res.json();
+      counts = data.counts || {};
+      buildGrid();
+      if (currentLetter) updateHero();
+    } catch (_) { buildGrid(); }
+  }
+
+  // ── Keyboard ───────────────────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    const key = e.key.toUpperCase();
+    if (ALPHABET.includes(key) && !e.ctrlKey && !e.metaKey) {
+      selectLetter(key);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      toggleCapture();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      nextLetter();
+    }
+  });
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  loadCounts();
+  </script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Captura de datos — Sign.Detect</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    main { grid-template-columns: 300px 1fr; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .cap-section { margin-bottom: 20px; }
+    .cap-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    /* Grid A-Z */
+    .letter-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
+    }
+    .letter-btn {
+      aspect-ratio: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text2);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+      position: relative;
+    }
+    .letter-btn:hover { background: var(--surface3); color: var(--text); }
+    .letter-btn.active {
+      background: rgba(1,245,13,.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .letter-btn.done {
+      background: rgba(1,245,13,.06);
+      border-color: rgba(1,245,13,.25);
+      color: rgba(1,245,13,.6);
+    }
+    .letter-btn .count-badge {
+      position: absolute;
+      bottom: 2px;
+      right: 3px;
+      font-size: 7px;
+      color: var(--text3);
+      font-family: var(--mono);
+    }
+    .letter-btn.done .count-badge { color: rgba(1,245,13,.5); }
+
+    /* Letra activa grande */
+    .active-letter-display {
+      text-align: center;
+      font-size: 4rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+      margin: 8px 0 4px;
+      font-family: var(--sans);
+      letter-spacing: .05em;
+    }
+    .active-letter-sub {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text3);
+      margin-bottom: 12px;
+    }
+
+    /* Barra de progreso */
+    .cap-progress-wrap {
+      background: var(--surface3);
+      border-radius: 6px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .cap-progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 6px;
+      transition: width .15s;
+      width: 0%;
+    }
+    .cap-progress-txt {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text2);
+      text-align: right;
+    }
+
+    /* Botón capturar */
+    .cap-btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface2);
+      color: var(--text2);
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+      margin-bottom: 8px;
+    }
+    .cap-btn.capturing {
+      background: rgba(1,245,13,.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .cap-btn:disabled { opacity: .4; cursor: default; }
+
+    /* Estado de detección */
+    .detect-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text3);
+      margin-bottom: 10px;
+    }
+    .detect-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--surface3);
+      flex-shrink: 0;
+      transition: background .2s;
+    }
+    .detect-dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+    /* ── Área de video ───────────────────────────────────────────────────── */
+    .video-area { display: flex; flex-direction: column; }
+
+    .samples-total {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text3);
+      text-align: center;
+      margin-top: 8px;
+    }
+    .samples-total span { color: var(--accent); font-weight: 700; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">📸</div>
+      <div class="logo-copy">
+        <div class="logo-title">Sign.Detect</div>
+        <div class="logo-sub">Captura de datos</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <a href="/" class="nav-link">← Detector</a>
+      <a href="/learn" class="nav-link">🤟 Aprender</a>
+      {% if current_user %}
+        <span class="nav-user">👤 {{ current_user.username }}</span>
+        <form action="/logout" method="post" style="display:inline">
+          <button type="submit" class="nav-link nav-link--logout">Salir</button>
+        </form>
+      {% else %}
+        <a href="/login" class="nav-link">Entrar</a>
+        <a href="/register" class="nav-link nav-link--cta">Registrarse</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <main>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- País -->
+      <div class="cap-section">
+        <div class="cap-label">Idioma</div>
+        <div class="country-list" id="country-list">
+          {% for key, meta in countries.items() %}
+          <button
+            class="country-btn {% if key == current_country %}active{% endif %}"
+            onclick="switchCountry('{{ key }}')"
+            {% if not meta.available %}disabled title="Sin modelo"{% endif %}>
+            <span class="country-flag">{{ meta.flag }}</span>
+            <span class="country-name">{{ meta.name }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Letra activa -->
+      <div class="cap-section">
+        <div class="cap-label">Letra activa</div>
+        <div class="active-letter-display" id="active-display">—</div>
+        <div class="active-letter-sub" id="active-sub">Selecciona una letra</div>
+
+        <div class="detect-status">
+          <div class="detect-dot" id="detect-dot"></div>
+          <span id="detect-txt">Sin mano detectada</span>
+        </div>
+
+        <div class="cap-progress-wrap">
+          <div class="cap-progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="cap-progress-txt" id="progress-txt">0 / 300</div>
+
+        <button class="cap-btn" id="cap-toggle-btn" onclick="toggleCapture()" disabled>
+          ▶ Iniciar captura
+        </button>
+        <button class="cap-btn" id="next-btn" onclick="nextLetter()" disabled>
+          Siguiente letra →
+        </button>
+      </div>
+
+      <!-- Grid A-Z -->
+      <div class="cap-section">
+        <div class="cap-label">Letras — clic para seleccionar</div>
+        <div class="letter-grid" id="letter-grid"></div>
+      </div>
+
+    </aside>
+
+    <!-- VIDEO -->
+    <section class="video-area">
+      <div class="video-wrap">
+        <div class="corner corner-tl"></div>
+        <div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div>
+        <div class="corner corner-br"></div>
+
+        <div class="video-frame">
+          <div class="v-overlay" id="loading-overlay">
+            <div class="spin"></div>
+            <div class="v-overlay-text">Iniciando cámara…</div>
+          </div>
+
+          <video id="webcam" autoplay muted playsinline
+                 style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;"></video>
+          <canvas id="overlay"
+                  style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+          <div class="hand-guide" id="hand-guide"></div>
+        </div>
+      </div>
+
+      <div class="meta-bar">
+        <div class="tag">🎥 <span>cámara 0 · espejo</span></div>
+        <div class="tag">Total guardado: <span id="total-saved" class="accent-val">0</span> muestras</div>
+        <div class="tag" id="country-tag">modelo: <span class="accent-val" id="country-label">{{ current_country }}</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>SIGN.DETECT — Captura de entrenamiento</span>
+    <div class="stack"><span>MediaPipe</span><div class="sep"></div><span>Flask</span></div>
+  </footer>
+
+  <script>
+    const ALPHABET      = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const SAMPLES_GOAL  = 300;
+    const CAPTURE_MS    = 120;   // intervalo entre frames guardados
+
+    let currentCountry  = '{{ current_country }}';
+    let currentLetter   = null;
+    let sessionCount    = 0;     // guardados en esta sesión para la letra activa
+    let counts          = {};    // { A: 45, B: 300, ... }
+    let totalSaved      = 0;
+    let capturing       = false;
+    let lastCapture     = 0;
+    let handDetected    = false;
+
+    const video      = document.getElementById('webcam');
+    const canvas     = document.getElementById('overlay');
+    const ctx        = canvas.getContext('2d');
+    const handGuide  = document.getElementById('hand-guide');
+
+    // ── MediaPipe landmark connections ───────────────────────────────────────
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],
+      [0,5],[5,6],[6,7],[7,8],
+      [0,9],[9,10],[10,11],[11,12],
+      [0,13],[13,14],[14,15],[15,16],
+      [0,17],[17,18],[18,19],[19,20],
+      [5,9],[9,13],[13,17]
+    ];
+
+    // ── Webcam ────────────────────────────────────────────────────────────────
+    navigator.mediaDevices.getUserMedia({video: {width:640, height:480}, audio: false})
+      .then(stream => {
+        video.srcObject = stream;
+        video.addEventListener('loadeddata', () => {
+          document.getElementById('loading-overlay').style.display = 'none';
+          canvas.width  = video.videoWidth  || 640;
+          canvas.height = video.videoHeight || 480;
+          loop();
+        });
+      })
+      .catch(() => {
+        document.getElementById('loading-overlay').querySelector('.v-overlay-text').textContent =
+          'No se pudo acceder a la cámara';
+      });
+
+    // ── Letter grid ───────────────────────────────────────────────────────────
+    function buildGrid() {
+      const grid = document.getElementById('letter-grid');
+      grid.innerHTML = '';
+      ALPHABET.forEach(letter => {
+        const btn = document.createElement('button');
+        btn.className = 'letter-btn';
+        btn.id        = 'btn-' + letter;
+        btn.textContent = letter;
+        const badge = document.createElement('span');
+        badge.className = 'count-badge';
+        badge.id = 'badge-' + letter;
+        badge.textContent = counts[letter] || 0;
+        btn.appendChild(badge);
+        btn.onclick = () => selectLetter(letter);
+        grid.appendChild(btn);
+      });
+      refreshGrid();
+    }
+
+    function refreshGrid() {
+      ALPHABET.forEach(letter => {
+        const btn   = document.getElementById('btn-' + letter);
+        const badge = document.getElementById('badge-' + letter);
+        if (!btn) return;
+        const n = counts[letter] || 0;
+        badge.textContent = n;
+        btn.classList.toggle('done', n >= SAMPLES_GOAL);
+        btn.classList.toggle('active', letter === currentLetter);
+      });
+    }
+
+    function selectLetter(letter) {
+      currentLetter = letter;
+      sessionCount  = 0;
+      capturing     = false;
+      updateCapBtn();
+      document.getElementById('active-display').textContent = letter;
+      document.getElementById('next-btn').disabled = false;
+      updateProgress();
+      refreshGrid();
+    }
+
+    function nextLetter() {
+      if (!currentLetter) { selectLetter('A'); return; }
+      const idx  = ALPHABET.indexOf(currentLetter);
+      const next = ALPHABET[(idx + 1) % ALPHABET.length];
+      selectLetter(next);
+    }
+
+    // ── Capture toggle ────────────────────────────────────────────────────────
+    function toggleCapture() {
+      if (!currentLetter) return;
+      capturing = !capturing;
+      updateCapBtn();
+    }
+
+    function updateCapBtn() {
+      const btn = document.getElementById('cap-toggle-btn');
+      btn.disabled = !currentLetter;
+      if (capturing) {
+        btn.textContent = '⏹ Pausar captura';
+        btn.classList.add('capturing');
+      } else {
+        btn.textContent = '▶ Iniciar captura';
+        btn.classList.remove('capturing');
+      }
+    }
+
+    // ── Progress ──────────────────────────────────────────────────────────────
+    function updateProgress() {
+      const n    = counts[currentLetter] || 0;
+      const pct  = Math.min(100, (n / SAMPLES_GOAL) * 100);
+      document.getElementById('progress-bar').style.width = pct + '%';
+      document.getElementById('progress-txt').textContent = `${n} / ${SAMPLES_GOAL}`;
+      const sub = n >= SAMPLES_GOAL
+        ? '¡Letra completa! ✓'
+        : currentLetter ? `Faltan ${SAMPLES_GOAL - n} muestras` : 'Selecciona una letra';
+      document.getElementById('active-sub').textContent = sub;
+      if (n >= SAMPLES_GOAL && capturing) {
+        capturing = false;
+        updateCapBtn();
+      }
+    }
+
+    // ── Main loop ─────────────────────────────────────────────────────────────
+    async function loop() {
+      while (true) {
+        await tick();
+        await new Promise(r => setTimeout(r, CAPTURE_MS));
+      }
+    }
+
+    async function tick() {
+      if (video.readyState < 2) return;
+
+      // Tomar frame
+      const offscreen = document.createElement('canvas');
+      offscreen.width  = video.videoWidth;
+      offscreen.height = video.videoHeight;
+      const oc = offscreen.getContext('2d');
+      oc.drawImage(video, 0, 0);
+      const b64 = offscreen.toDataURL('image/jpeg', 0.7).split(',')[1];
+
+      const shouldSave = capturing && currentLetter &&
+                         (counts[currentLetter] || 0) < SAMPLES_GOAL;
+
+      try {
+        const endpoint = shouldSave ? '/capture/save' : '/predict';
+        const body     = shouldSave
+          ? {frame: b64, label: currentLetter, country: currentCountry}
+          : {frame: b64};
+        const res  = await fetch(endpoint, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        handDetected = !!(data && data.detected);
+        handGuide.classList.toggle('visible', handDetected);
+
+        // Actualizar dot de detección
+        document.getElementById('detect-dot').classList.toggle('on', handDetected);
+        document.getElementById('detect-txt').textContent =
+          handDetected ? 'Mano detectada ✓' : 'Sin mano detectada';
+
+        if (shouldSave && data.saved) {
+          counts[currentLetter] = (counts[currentLetter] || 0) + 1;
+          totalSaved++;
+          document.getElementById('total-saved').textContent = totalSaved;
+          updateProgress();
+          refreshGrid();
+        }
+
+        drawOverlay(data);
+      } catch (_) {}
+    }
+
+    function drawOverlay(data) {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      if (!data || !data.detected || !data.landmarks) return;
+      function px(lm) { return {x: (1 - lm.x) * W, y: lm.y * H}; }
+      ctx.strokeStyle = 'rgba(1,245,13,0.7)';
+      ctx.lineWidth = 2;
+      for (const [a, b] of HAND_CONNECTIONS) {
+        if (!data.landmarks[a] || !data.landmarks[b]) continue;
+        const pa = px(data.landmarks[a]), pb = px(data.landmarks[b]);
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      }
+      ctx.fillStyle = '#01f50d';
+      for (const lm of data.landmarks) {
+        const {x, y} = px(lm);
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // ── Cambiar país ──────────────────────────────────────────────────────────
+    async function switchCountry(country) {
+      const res  = await fetch('/set_country', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({country})
+      });
+      const data = await res.json();
+      if (!data.ok) return;
+      currentCountry = country;
+      document.getElementById('country-label').textContent = country;
+      document.querySelectorAll('.country-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`.country-btn[onclick="switchCountry('${country}')"]`)
+              ?.classList.add('active');
+      currentLetter = null;
+      sessionCount  = 0;
+      capturing     = false;
+      document.getElementById('active-display').textContent = '—';
+      document.getElementById('active-sub').textContent = 'Selecciona una letra';
+      updateCapBtn();
+      await loadCounts();
+    }
+
+    async function loadCounts() {
+      try {
+        const res  = await fetch('/capture/counts?country=' + currentCountry);
+        const data = await res.json();
+        counts = data.counts || {};
+        totalSaved = Object.values(counts).reduce((a, b) => a + b, 0);
+        document.getElementById('total-saved').textContent = totalSaved;
+        buildGrid();
+        if (currentLetter) updateProgress();
+      } catch (_) { buildGrid(); }
+    }
+
+    // ── Teclado A-Z ───────────────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      const key = e.key.toUpperCase();
+      if (ALPHABET.includes(key)) {
+        selectLetter(key);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        toggleCapture();
+      }
+    });
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    loadCounts();
+  </script>
+</body>
+</html>

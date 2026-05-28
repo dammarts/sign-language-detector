@@ -1,23 +1,41 @@
 import os
 import sys
-import time
+import json
+import base64
 
 os.environ.setdefault('GLOG_minloglevel', '2')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 os.environ.setdefault('TF_ENABLE_ONEDNN_OPTS', '0')
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+import csv as csv_module
 import pickle
-import socket
 import threading
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='google.protobuf')
 
 import cv2
 import numpy as np
-from flask import Flask, Response, jsonify, render_template, request
+from flask import (Flask, jsonify, redirect, render_template,
+                   request, session as flask_session, url_for)
 
 from config import COUNTRIES, MODEL_BASE
-from utils.hand_detector import extract_landmarks, mp_drawing, mp_hands
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
+
+HINT_IMG_DIRS = {
+    'asl':      BASE_DIR / 'img' / 'señas ingles',
+    'colombia': BASE_DIR / 'img' / 'señas español',
+    'china':    BASE_DIR / 'img' / 'señas chino',
+}
+from utils.hand_detector import extract_landmarks
+from utils.db import (authenticate_user, create_user,
+                      delete_history, get_history, save_session)
 
 # ── Estado del modelo ────────────────────────────────────────────────────────
 _model_lock = threading.Lock()
@@ -61,113 +79,116 @@ def get_available_countries():
 load_model('asl')
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
 
 
-# ── Utilidades de video ──────────────────────────────────────────────────────
-def _placeholder_frame(message: str) -> bytes:
-    frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    cv2.putText(frame, message, (40, 240), cv2.FONT_HERSHEY_SIMPLEX,
-                0.9, (0, 0, 255), 2, cv2.LINE_AA)
-    _, buffer = cv2.imencode('.jpg', frame)
-    return buffer.tobytes()
+# ── Auth helper ──────────────────────────────────────────────────────────────
+def get_current_user():
+    uid = flask_session.get('user_id')
+    if not uid:
+        return None
+    return {'id': uid, 'username': flask_session.get('username')}
 
 
-# ── Cámara compartida (hilo de fondo) ───────────────────────────────────────
-_cam_lock     = threading.Lock()
-_cam_ready    = threading.Event()
-_latest_annotated = None   # frame BGR con landmarks y predicción dibujados
-_latest_landmarks = None   # np.array de 63 floats, o None si no hay mano
-_camera_active    = False
+# ── Rutas de autenticación ───────────────────────────────────────────────────
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'GET':
+        return render_template('register.html', error=None)
+
+    username = request.form.get('username', '').strip()
+    email    = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+    confirm  = request.form.get('confirm_password', '')
+
+    if not username or not email or not password:
+        return render_template('register.html', error='Todos los campos son obligatorios')
+    if password != confirm:
+        return render_template('register.html', error='Las contraseñas no coinciden')
+    if len(password) < 6:
+        return render_template('register.html', error='La contraseña debe tener al menos 6 caracteres')
+
+    user_id, err = create_user(username, email, password)
+    if err:
+        return render_template('register.html', error=err)
+
+    return redirect(url_for('login', registered='1'))
 
 
-def _start_camera():
-    def worker():
-        global _latest_annotated, _latest_landmarks, _camera_active
-        # CAP_DSHOW (DirectShow) requerido en Windows; en Linux usar backend por defecto
-        if sys.platform == 'win32':
-            cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-        else:
-            cam = cv2.VideoCapture(0)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'GET':
+        registered = request.args.get('registered')
+        return render_template('login.html', error=None, registered=registered)
 
-        if not cam.isOpened():
-            _camera_active = False
-            _cam_ready.set()
-            return
+    identifier = request.form.get('identifier', '').strip()
+    password   = request.form.get('password', '')
 
-        # Windows necesita varios frames de calentamiento antes de devolver
-        # datos válidos; leerlos sin procesar evita un break prematuro.
-        for _ in range(10):
-            cam.read()
-            time.sleep(0.05)
+    if not identifier or not password:
+        return render_template('login.html', error='Completa todos los campos', registered=None)
 
-        _camera_active = True
-        _cam_ready.set()
+    user, err = authenticate_user(identifier, password)
+    if err:
+        return render_template('login.html', error=err, registered=None)
 
-        consecutive_failures = 0
-        while True:
-            ok, frame = cam.read()
-            if not ok:
-                consecutive_failures += 1
-                if consecutive_failures > 60:   # ~2s de fallos consecutivos → desconectada
-                    break
-                time.sleep(0.033)
-                continue
-            consecutive_failures = 0
-
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            lm, hand_lm = extract_landmarks(rgb)
-
-            out = frame.copy()
-            if lm is not None:
-                with _model_lock:
-                    m, enc = model, le
-                label = enc.inverse_transform([m.predict([lm])[0]])[0]
-                mp_drawing.draw_landmarks(out, hand_lm, mp_hands.HAND_CONNECTIONS)
-                cv2.putText(out, label, (50, 150), cv2.FONT_HERSHEY_SIMPLEX,
-                            3, (255, 0, 255), 4, cv2.LINE_AA)
-
-            out = cv2.flip(out, 1)  # efecto espejo — más natural para el usuario
-
-            with _cam_lock:
-                _latest_annotated = out
-                _latest_landmarks = lm
-
-        cam.release()
-
-    threading.Thread(target=worker, daemon=True).start()
+    flask_session['user_id']  = user['id']
+    flask_session['username'] = user['username']
+    return redirect(url_for('index'))
 
 
-# Solo abrir la cámara en el proceso que realmente sirve peticiones.
-# En debug mode, Flask usa un reloader que crea DOS procesos; el proceso padre
-# (watcher) no debe capturar la cámara para que el hijo (servidor) pueda hacerlo.
-if os.environ.get('WERKZEUG_RUN_MAIN') != 'false':
-    _start_camera()
+@app.route('/logout', methods=['POST'])
+def logout():
+    flask_session.clear()
+    return redirect(url_for('index'))
 
 
-# ── Generador MJPEG ──────────────────────────────────────────────────────────
-def generate_frames():
-    _cam_ready.wait(timeout=15.0)
+@app.route('/me')
+def me():
+    return jsonify({'user': get_current_user()})
 
-    if not _camera_active:
-        # Cámara no disponible: enviar placeholder en loop para mantener el stream abierto
-        placeholder = _placeholder_frame('No se detecto camara')
-        while True:
-            yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n'
-                   + placeholder + b'\r\n')
-            time.sleep(1.0)
-        return
 
-    while True:
-        with _cam_lock:
-            frame = _latest_annotated
-        if frame is None:
-            time.sleep(0.033)
-            continue
-        ok, buf = cv2.imencode('.jpg', frame)
-        if ok:
-            yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n'
-                   + buf.tobytes() + b'\r\n')
-        time.sleep(0.033)
+# ── Predicción desde frame enviado por el browser ───────────────────────────
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.get_json(silent=True) or {}
+    frame_b64 = data.get('frame', '')
+    letter = data.get('letter', '').upper()
+
+    try:
+        frame_bytes = base64.b64decode(frame_b64)
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except Exception:
+        return jsonify({'detected': False})
+
+    if frame is None:
+        return jsonify({'detected': False})
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    lm, hand_lm = extract_landmarks(rgb)
+
+    if lm is None:
+        return jsonify({'detected': False, 'label': None, 'score': 0.0, 'landmarks': None})
+
+    with _model_lock:
+        m, enc = model, le
+
+    proba = m.predict_proba([lm])[0]
+    label = enc.classes_[proba.argmax()]
+
+    landmarks = [{'x': float(pt.x), 'y': float(pt.y)} for pt in hand_lm.landmark]
+
+    score_val = float(proba.max())
+    if letter and letter in enc.classes_:
+        target_idx = list(enc.classes_).index(letter)
+        score_val = float(proba[target_idx])
+
+    return jsonify({
+        'detected': True,
+        'label': label,
+        'score': score_val,
+        'landmarks': landmarks,
+    })
 
 
 # ── Rutas principales ────────────────────────────────────────────────────────
@@ -176,7 +197,8 @@ def index():
     countries = get_available_countries()
     return render_template('index.html',
                            countries=countries,
-                           current_country=current_country)
+                           current_country=current_country,
+                           current_user=get_current_user())
 
 
 @app.route('/set_country', methods=['POST'])
@@ -204,12 +226,6 @@ def get_current_country():
     return jsonify({'country': current_country, **COUNTRIES[current_country]})
 
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
 # ── Rutas de aprendizaje ─────────────────────────────────────────────────────
 @app.route('/learn')
 def learn():
@@ -219,34 +235,10 @@ def learn():
     return render_template('learn.html',
                            countries=countries,
                            current_country=current_country,
-                           letters=letters)
+                           letters=letters,
+                           current_user=get_current_user())
 
 
-@app.route('/learn/score')
-def learn_score():
-    letter = request.args.get('letter', '').upper()
-
-    with _cam_lock:
-        landmarks = _latest_landmarks
-
-    if landmarks is None:
-        return jsonify({'score': 0.0, 'detected': False, 'label': None})
-
-    with _model_lock:
-        m, enc = model, le
-
-    if letter not in enc.classes_:
-        return jsonify({'score': 0.0, 'detected': True, 'label': None})
-
-    proba = m.predict_proba([landmarks])[0]
-    target_idx = list(enc.classes_).index(letter)
-    score = float(proba[target_idx])
-    predicted_label = enc.classes_[proba.argmax()]
-
-    return jsonify({'score': score, 'detected': True, 'label': predicted_label})
-
-
-# ── Pista visual (landmarks de referencia desde los datos de entrenamiento) ──
 @app.route('/learn/hint/<letter>')
 def learn_hint(letter):
     import pandas as pd
@@ -277,13 +269,25 @@ def learn_hint(letter):
     return jsonify({'ok': True, 'letter': letter, 'points': points})
 
 
+@app.route('/hint_img/<country>/<letter>')
+def hint_img(country, letter):
+    if country not in HINT_IMG_DIRS:
+        return '', 404
+    img_path = HINT_IMG_DIRS[country] / f'{letter.upper()}.jpg'
+    if not img_path.exists():
+        return '', 404
+    from flask import send_file
+    return send_file(str(img_path), mimetype='image/jpeg')
+
+
 # ── Dashboard de progreso ────────────────────────────────────────────────────
 @app.route('/dashboard')
 def dashboard():
     countries = get_available_countries()
     return render_template('dashboard.html',
                            countries=countries,
-                           current_country=current_country)
+                           current_country=current_country,
+                           current_user=get_current_user())
 
 
 # ── Modo deletrear palabras ──────────────────────────────────────────────────
@@ -300,7 +304,7 @@ SPELL_WORDS = {
 def spell():
     countries = get_available_countries()
     with _model_lock:
-        country = current_country
+        country   = current_country
         available = set(enc_class for enc_class in le.classes_)
 
     words = [w for w in SPELL_WORDS.get(country, SPELL_WORDS['asl'])
@@ -309,21 +313,165 @@ def spell():
     return render_template('spell.html',
                            countries=countries,
                            current_country=country,
-                           words=words)
+                           words=words,
+                           current_user=get_current_user())
+
+
+# ── API: historial de sesiones (MongoDB) ─────────────────────────────────────
+@app.route('/api/session', methods=['POST'])
+def api_save_session():
+    user = get_current_user()
+    if not user:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    doc = request.get_json(silent=True)
+    if not doc:
+        return jsonify({'ok': False, 'error': 'Sin datos'}), 400
+    save_session(user['id'], doc)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/history', methods=['GET'])
+def api_history():
+    user = get_current_user()
+    if not user:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    country = request.args.get('country')
+    limit   = int(request.args.get('limit', 200))
+    data    = get_history(user['id'], country=country, limit=limit)
+    return jsonify({'ok': True, **data})
+
+
+@app.route('/api/history', methods=['DELETE'])
+def api_delete_history():
+    user = get_current_user()
+    if not user:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    country = request.args.get('country')
+    count   = delete_history(user['id'], country=country)
+    return jsonify({'ok': True, 'deleted': count})
+
+
+# ── Captura de datos de entrenamiento (web) ──────────────────────────────────
+_capture_locks = {c: threading.Lock() for c in ('asl', 'colombia', 'china')}
+
+@app.route('/capture')
+def capture_page():
+    countries = get_available_countries()
+    return render_template('capture.html',
+                           countries=countries,
+                           current_country=current_country,
+                           current_user=get_current_user())
+
+
+@app.route('/training')
+def training_studio():
+    countries = get_available_countries()
+    return render_template('training_studio.html',
+                           countries=countries,
+                           current_country=current_country,
+                           current_user=get_current_user())
+
+
+@app.route('/capture/save', methods=['POST'])
+def capture_save():
+    from config import LANDMARK_COLUMNS
+    data    = request.get_json(silent=True) or {}
+    frame_b64 = data.get('frame', '')
+    label     = data.get('label', '').upper()
+    country   = data.get('country', 'asl')
+
+    if not label or country not in COUNTRIES:
+        return jsonify({'ok': False})
+
+    try:
+        frame_bytes = base64.b64decode(frame_b64)
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except Exception:
+        return jsonify({'ok': False, 'detected': False})
+
+    if frame is None:
+        return jsonify({'ok': False, 'detected': False})
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    lm, _ = extract_landmarks(rgb)
+
+    if lm is None:
+        return jsonify({'ok': True, 'detected': False, 'saved': False})
+
+    folder = 'China' if country == 'china' else country
+    data_dir = BASE_DIR / 'data' / folder
+    data_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = data_dir / 'landmarks.csv'
+
+    with _capture_locks[country]:
+        file_exists = csv_path.exists()
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv_module.DictWriter(f, fieldnames=LANDMARK_COLUMNS)
+            if not file_exists:
+                writer.writeheader()
+            row = {f'x{i}': lm[i*3] for i in range(21)}
+            row.update({f'y{i}': lm[i*3+1] for i in range(21)})
+            row.update({f'z{i}': lm[i*3+2] for i in range(21)})
+            row['label'] = label
+            writer.writerow(row)
+
+    return jsonify({'ok': True, 'detected': True, 'saved': True})
+
+
+@app.route('/capture/reset_letter', methods=['POST'])
+def capture_reset_letter():
+    import pandas as pd
+    data    = request.get_json(silent=True) or {}
+    label   = data.get('label', '').upper()
+    country = data.get('country', 'asl')
+
+    if not label or country not in COUNTRIES:
+        return jsonify({'ok': False, 'error': 'Datos inválidos'}), 400
+
+    folder   = 'China' if country == 'china' else country
+    csv_path = BASE_DIR / 'data' / folder / 'landmarks.csv'
+
+    if not csv_path.exists():
+        return jsonify({'ok': True, 'deleted': 0})
+
+    with _capture_locks[country]:
+        df      = pd.read_csv(csv_path)
+        deleted = int((df['label'] == label).sum())
+        df      = df[df['label'] != label]
+        if df.empty:
+            csv_path.unlink()
+        else:
+            df.to_csv(csv_path, index=False)
+
+    return jsonify({'ok': True, 'deleted': deleted})
+
+
+@app.route('/capture/counts')
+def capture_counts():
+    country  = request.args.get('country', 'asl')
+    folder   = 'China' if country == 'china' else country
+    csv_path = BASE_DIR / 'data' / folder / 'landmarks.csv'
+    counts   = {}
+    if csv_path.exists():
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        counts = df['label'].value_counts().to_dict()
+    return jsonify({'ok': True, 'counts': counts})
 
 
 # ── Arranque ─────────────────────────────────────────────────────────────────
-def _lan_ip() -> str:
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(('8.8.8.8', 80))
-            return s.getsockname()[0]
-    except OSError:
-        return '127.0.0.1'
-
-
 if __name__ == '__main__':
-    port = 5000
+    import socket
+    def _lan_ip():
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(('8.8.8.8', 80))
+                return s.getsockname()[0]
+        except OSError:
+            return '127.0.0.1'
+
+    port = int(os.environ.get('PORT', 5000))
     print(f"\n  Local:   http://127.0.0.1:{port}")
     print(f"  Network: http://{_lan_ip()}:{port}\n")
-    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=port, debug=False)
