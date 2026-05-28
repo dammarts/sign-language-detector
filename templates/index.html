@@ -28,7 +28,9 @@
     </div>
     <div class="header-right">
       <a href="/learn" class="nav-link">Aprender →</a>
+      {% if current_user and current_user.email == TRAINING_ALLOWED_EMAIL %}
       <a href="/training" class="nav-link">🎯 Training Studio</a>
+      {% endif %}
       {% if current_user %}
         <span class="nav-user">👤 {{ current_user.username }}</span>
         <form action="/logout" method="post" style="display:inline">

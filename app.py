@@ -76,10 +76,13 @@ def get_available_countries():
     return available
 
 
+TRAINING_ALLOWED_EMAIL = 'dammarts01@gmail.com'
+
 load_model('asl')
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
+app.jinja_env.globals['TRAINING_ALLOWED_EMAIL'] = TRAINING_ALLOWED_EMAIL
 
 
 # ── Auth helper ──────────────────────────────────────────────────────────────
@@ -87,7 +90,11 @@ def get_current_user():
     uid = flask_session.get('user_id')
     if not uid:
         return None
-    return {'id': uid, 'username': flask_session.get('username')}
+    return {
+        'id':       uid,
+        'username': flask_session.get('username'),
+        'email':    flask_session.get('email', ''),
+    }
 
 
 # ── Rutas de autenticación ───────────────────────────────────────────────────
@@ -133,6 +140,7 @@ def login():
 
     flask_session['user_id']  = user['id']
     flask_session['username'] = user['username']
+    flask_session['email']    = user.get('email', '')
     return redirect(url_for('index'))
 
 
@@ -365,6 +373,8 @@ def capture_page():
 
 @app.route('/training')
 def training_studio():
+    if flask_session.get('email') != TRAINING_ALLOWED_EMAIL:
+        return render_template('403.html', current_user=get_current_user()), 403
     countries = get_available_countries()
     return render_template('training_studio.html',
                            countries=countries,

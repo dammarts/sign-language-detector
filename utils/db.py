@@ -48,7 +48,7 @@ def authenticate_user(identifier, password):
     )
     if not user or not check_password_hash(user['password_hash'], password):
         return None, 'Credenciales incorrectas'
-    return {'id': str(user['_id']), 'username': user['username']}, None
+    return {'id': str(user['_id']), 'username': user['username'], 'email': user['email']}, None
 
 
 def save_session(user_id, session_doc):
