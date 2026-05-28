@@ -7,6 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/spell.css') }}">
+
+     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+  
+  <script>
+    if (localStorage.getItem('sd-theme') === 'light')
+      document.documentElement.classList.add('light');
+  </script>
 </head>
 <body>
 

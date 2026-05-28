@@ -6,6 +6,14 @@
   <title>Sign Language Detector</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- 1️⃣  Agrega esta línea después de style.css -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+
+  <!-- 2️⃣  Evita el "flash" de tema incorrecto al cargar -->
+  <script>
+    if (localStorage.getItem('sd-theme') === 'light')
+      document.documentElement.classList.add('light');
+  </script>
 </head>
 <body>
 
@@ -30,6 +38,7 @@
         <a href="/login" class="nav-link">Entrar</a>
         <a href="/register" class="nav-link nav-link--cta">Registrarse</a>
       {% endif %}
+      <button id="theme-toggle" aria-label="Cambiar tema">🌙 Oscuro</button>
       <div class="live-badge">
         <div class="live-dot"></div>
         <span>modelo activo</span>
@@ -305,5 +314,8 @@
       }
     }
   </script>
+
+  <!-- 4️⃣  Script del toggle al final -->
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 </body>
 </html>

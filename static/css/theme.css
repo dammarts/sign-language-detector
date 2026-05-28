@@ -1,0 +1,239 @@
+/* ============================================================
+   theme.css — Sign.Detect · Light Mode
+   Agrega DESPUÉS de style.css en cada HTML
+   ============================================================ */
+
+/* ── TRANSICIÓN GLOBAL ────────────────────────────────────── */
+*, *::before, *::after {
+  transition:
+    background-color 0.25s ease,
+    color            0.25s ease,
+    border-color     0.25s ease,
+    box-shadow       0.25s ease,
+    backdrop-filter  0.25s ease;
+}
+
+/* ── VARIABLES MODO CLARO ─────────────────────────────────── */
+/*
+   Paleta: paper-tech — marfil cálido + verde musgo profundo
+   El acento verde del dark se convierte en verde botella (#1a6b2a)
+   para mantener carácter sin quemar sobre fondo claro
+*/
+:root.light {
+  --bg:          #e4e2df;          /* papel ligeramente cálido, no blanco puro */
+  --surface:     #eeebe3;          /* superficie principal — casi blanco crema */
+  --surface2:    #ede9e0;          /* superficie secundaria */
+  --surface3:    #e2ddd3;          /* superficie terciaria / hover */
+  --border:      rgba(0,0,0,0.07);
+  --border2:     rgba(0,0,0,0.11);
+  --border3:     rgba(0,0,0,0.18);
+  --accent:      #1a8c2a;          /* verde botella — mismo rol que el neón */
+  --accent-dim:  rgba(26,140,42,0.09);
+  --accent-glow: rgba(26,140,42,0.18);
+  --blue:        #000000;
+  --blue-dim:    rgba(43,95,201,0.10);
+  --text:        #1c1a14;          /* casi negro cálido */
+  --text2:       #000000;
+  --text3:       #000000;
+  --danger:      #c0392b;
+  --sans:        'Syne', sans-serif;
+  --mono:        'Fira Code', monospace;
+}
+
+/* ── BODY LIGHT ───────────────────────────────────────────── */
+:root.light body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* grid texture — más sutil sobre claro */
+:root.light body::before {
+  background-image:
+    linear-gradient(rgba(26,140,42,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,140,42,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── HEADER LIGHT ─────────────────────────────────────────── */
+:root.light header {
+  background: rgba(240,237,230,0.85);
+  border-bottom-color: var(--border2);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+}
+
+/* ── SCROLLBAR LIGHT ──────────────────────────────────────── */
+:root.light ::-webkit-scrollbar-thumb {
+  background: var(--surface3);
+}
+
+/* ── SIDEBAR LIGHT ────────────────────────────────────────── */
+:root.light .sidebar {
+  background: var(--surface);
+  border-right-color: var(--border2);
+  /* sombra lateral suave para separar del video */
+  box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+}
+
+:root.light .sidebar-block {
+  border-bottom-color: var(--border);
+}
+
+/* ── COUNTRY BUTTONS LIGHT ────────────────────────────────── */
+:root.light .country-btn:hover:not(:disabled) {
+  background: var(--surface2);
+  border-color: var(--border2);
+}
+
+:root.light .country-btn.active {
+  background: var(--accent-dim);
+  border-color: rgba(26,140,42,0.25);
+  color: var(--accent);
+}
+
+:root.light .c-active-dot {
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+/* badges */
+:root.light .badge-ok {
+  background: rgba(26,140,42,0.08);
+  color: var(--accent);
+  border-color: rgba(26,140,42,0.22);
+}
+
+:root.light .badge-none {
+  background: rgba(0,0,0,0.04);
+  color: var(--text3);
+  border-color: var(--border);
+}
+
+/* ── CMD BOX LIGHT ────────────────────────────────────────── */
+:root.light .cmd-box {
+  background: var(--surface2);
+  border-color: var(--border2);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+}
+
+:root.light .cmd-step {
+  border-bottom-color: var(--border);
+}
+
+:root.light .cmd-body code {
+  background: rgba(43,95,201,0.08);
+  color: var(--blue);
+}
+
+/* ── VIDEO AREA LIGHT ─────────────────────────────────────── */
+:root.light .video-area::before {
+  background: radial-gradient(ellipse, rgba(26,140,42,0.05) 0%, transparent 70%);
+}
+
+:root.light .video-frame {
+  background: var(--surface2);
+  border-color: var(--border2);
+  box-shadow:
+    0 0 0 4px rgba(0,0,0,0.03),
+    0 8px 32px rgba(0,0,0,0.10);
+}
+
+/* ── HUD (chip sobre el video) LIGHT ──────────────────────── */
+:root.light .hud {
+  background: rgba(250,248,243,0.82);
+  border-color: var(--border2);
+  box-shadow: 0 1px 8px rgba(0,0,0,0.10);
+}
+
+/* ── SWITCH / LOADING OVERLAY LIGHT ──────────────────────── */
+:root.light .v-overlay {
+  background: var(--surface);
+}
+
+:root.light .v-switch {
+  background: rgba(240,237,230,0.92);
+  backdrop-filter: blur(6px);
+}
+
+:root.light .v-switch-text {
+  color: var(--accent);
+}
+
+/* ── SCAN LINE LIGHT ──────────────────────────────────────── */
+:root.light .video-wrap::before {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.5;
+}
+
+/* ── FOOTER LIGHT ─────────────────────────────────────────── */
+:root.light footer {
+  background: rgba(240,237,230,0.85);
+  border-top-color: var(--border2);
+  box-shadow: 0 -1px 0 rgba(0,0,0,0.05);
+}
+
+:root.light footer .sep {
+  background: var(--border2);
+}
+
+/* ── NAV LINK LIGHT ───────────────────────────────────────── */
+:root.light .nav-link {
+  background: var(--surface2);
+  border-color: var(--border2);
+  color: var(--text2);
+}
+
+:root.light .nav-link:hover {
+  color: var(--text);
+  border-color: var(--border3);
+  background: var(--surface3);
+}
+
+/* ── LIVE BADGE LIGHT ─────────────────────────────────────── */
+:root.light .live-badge {
+  background: var(--surface2);
+  border-color: var(--border2);
+}
+
+/* ── TOAST LIGHT ──────────────────────────────────────────── */
+:root.light .toast {
+  background: var(--surface);
+  border-color: var(--border2);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+:root.light .toast.err {
+  border-color: rgba(192,57,43,0.35);
+}
+
+/* ── THEME TOGGLE BTN ─────────────────────────────────────── */
+#theme-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  border-radius: 6px;
+  padding: 5px 13px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1;
+}
+
+#theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* indicador de modo en el botón */
+#theme-toggle::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+  box-shadow: 0 0 5px var(--accent-glow);
+}
