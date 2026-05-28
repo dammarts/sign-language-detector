@@ -22,6 +22,16 @@
       <a href="/" class="nav-link">← Detector</a>
       <a href="/dashboard" class="nav-link">📊 Progreso</a>
       <a href="/spell" class="nav-link">✏️ Deletrear</a>
+      <a href="/training" class="nav-link">🎯 Training Studio</a>
+      {% if current_user %}
+        <span class="nav-user">👤 {{ current_user.username }}</span>
+        <form action="/logout" method="post" style="display:inline">
+          <button type="submit" class="nav-link nav-link--logout">Salir</button>
+        </form>
+      {% else %}
+        <a href="/login" class="nav-link">Entrar</a>
+        <a href="/register" class="nav-link nav-link--cta">Registrarse</a>
+      {% endif %}
       <div class="live-badge">
         <div class="live-dot"></div>
         <span id="session-timer">00:00</span>
@@ -130,6 +140,7 @@
                  style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;"></video>
           <canvas id="overlay"
                   style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+          <div class="hand-guide"></div>
         </div>
       </div>
       <div class="meta-bar">
@@ -158,7 +169,8 @@
   <div class="hint-overlay" id="hint-overlay" onclick="closeHint()">
     <div class="hint-popup" onclick="event.stopPropagation()">
       <div class="hint-popup-title">Posición de referencia: <span id="hint-letter-label">A</span></div>
-      <canvas id="hint-canvas" width="240" height="200"></canvas>
+      <img id="hint-img" src="" alt="Referencia de seña"
+           style="width:240px;height:240px;object-fit:contain;border-radius:10px;background:#0d0f1a;display:block;margin:0 auto;">
       <div class="hint-popup-note" id="hint-popup-note">−1 ⭐ aplicado</div>
       <button class="lrn-btn primary" onclick="closeHint()" style="margin-top:10px">Cerrar</button>
     </div>
@@ -196,6 +208,7 @@
     </div>
   </div>
 
+  <script>window.__userId = "{{ current_user.id if current_user else '' }}";</script>
   <script>
     // ── Webcam + overlay ──────────────────────────────────────────────────
     const video  = document.getElementById('webcam');
@@ -241,9 +254,12 @@
       return await res.json();
     }
 
+    const handGuide = document.querySelector('.hand-guide');
+
     function drawOverlay(data) {
       const W = canvas.width, H = canvas.height;
       ctx.clearRect(0, 0, W, H);
+      handGuide.classList.toggle('visible', !!(data && data.detected));
       if (!data || !data.detected || !data.landmarks) return;
       function px(lm) { return {x: (1 - lm.x) * W, y: lm.y * H}; }
       ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 2;
@@ -276,6 +292,8 @@
 
     // ── Estado de sesión ──────────────────────────────────────────────────
     const session = {
+      id:       Date.now().toString(),
+      date:     new Date().toISOString(),
       startMs:  Date.now(),
       country:  currentCountry,
       letters:  {}    // { A: {stars, hintsUsed, timeMs, completed} }
@@ -347,6 +365,32 @@
         timeMs:    Date.now() - letterStartMs,
         completed
       };
+      autoSave();
+    }
+
+    function autoSave() {
+      const sessionData = {
+        session_id:  session.id,
+        date:        session.date,
+        country:     session.country,
+        duration_ms: Date.now() - session.startMs,
+        letters:     { ...session.letters }
+      };
+      const history = JSON.parse(localStorage.getItem('signdetect_history') || '[]');
+      const idx = history.findIndex(s => s.session_id === session.id);
+      if (idx >= 0) {
+        history[idx] = sessionData;
+      } else {
+        history.push(sessionData);
+      }
+      localStorage.setItem('signdetect_history', JSON.stringify(history));
+      if (window.__userId) {
+        fetch('/api/session', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(sessionData)
+        }).catch(() => {});
+      }
     }
 
     function starsEmoji(n) {
@@ -374,21 +418,21 @@
         const bar = document.getElementById('score-bar');
         bar.style.width = pct + '%';
         bar.className   = 'score-bar' +
-          (pct >= 85 ? ' bar-green' : pct >= 55 ? ' bar-yellow' : ' bar-red');
+          (pct >= 42 ? ' bar-green' : pct >= 27 ? ' bar-yellow' : ' bar-red');
         document.getElementById('score-pct').textContent = pct + '%';
 
         const fb = document.getElementById('feedback-text');
         if (!data || !data.detected) {
           fb.textContent = 'Coloca tu mano frente a la cámara';
           successCount = 0; resetDots();
-        } else if (pct >= 85) {
+        } else if (pct >= 42) {
           successCount++;
           fillDots(successCount);
           fb.textContent = successCount < SUCCESS_NEEDED
             ? `¡Perfecto! Mantén la pose… (${successCount}/${SUCCESS_NEEDED})`
             : '¡Excelente! Avanzando…';
           if (successCount >= SUCCESS_NEEDED) completeLetter();
-        } else if (pct >= 55) {
+        } else if (pct >= 27) {
           successCount = Math.max(0, successCount - 1);
           fillDots(successCount);
           fb.textContent = '¡Casi! Mantén la mano más estable';
@@ -402,29 +446,28 @@
     setInterval(updateScore, 200);
 
     // ── Pista ─────────────────────────────────────────────────────────────
-    async function showHint() {
+    function showHint() {
       if (hintsUsed >= 2) return;
       const letter = letters[currentIdx];
-      try {
-        const res  = await fetch(`/learn/hint/${letter}`);
-        const data = await res.json();
-        if (!data.ok) { showToast('Sin datos de referencia para esta letra', false); return; }
 
-        hintsUsed++;
-        letterStars = Math.max(1, letterStars - 1);
-        updateStars();
+      hintsUsed++;
+      letterStars = Math.max(1, letterStars - 1);
+      updateStars();
 
-        const btn = document.getElementById('hint-btn');
-        const meta = document.getElementById('hint-meta');
-        if (hintsUsed >= 2) { btn.disabled = true; meta.textContent = 'Sin pistas disponibles'; }
-        else { meta.textContent = `Pista ${hintsUsed}/2 usada · queda 1`; }
+      const btn  = document.getElementById('hint-btn');
+      const meta = document.getElementById('hint-meta');
+      if (hintsUsed >= 2) { btn.disabled = true; meta.textContent = 'Sin pistas disponibles'; }
+      else { meta.textContent = `Pista ${hintsUsed}/2 usada · queda 1`; }
 
-        document.getElementById('hint-letter-label').textContent = letter;
-        document.getElementById('hint-popup-note').textContent =
-          `−1 ⭐ aplicado · Estrellas restantes: ${letterStars}`;
-        drawHand(data.points);
-        document.getElementById('hint-overlay').classList.add('show');
-      } catch (_) { showToast('Error cargando pista', false); }
+      document.getElementById('hint-letter-label').textContent = letter;
+      document.getElementById('hint-popup-note').textContent =
+        `−1 ⭐ aplicado · Estrellas restantes: ${letterStars}`;
+
+      const img = document.getElementById('hint-img');
+      img.src = `/hint_img/${currentCountry}/${letter}`;
+      img.onerror = () => { img.alt = 'Imagen no disponible para esta letra'; };
+
+      document.getElementById('hint-overlay').classList.add('show');
     }
 
     function closeHint() {
@@ -501,14 +544,7 @@
     }
 
     function saveSession() {
-      const history = JSON.parse(localStorage.getItem('signdetect_history') || '[]');
-      history.push({
-        date:        new Date().toISOString(),
-        country:     session.country,
-        duration_ms: Date.now() - session.startMs,
-        letters:     session.letters
-      });
-      localStorage.setItem('signdetect_history', JSON.stringify(history));
+      autoSave();
     }
 
     // ── Toast ─────────────────────────────────────────────────────────────

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar sesión — Sign Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .auth-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .auth-card {
+      background: #13152a;
+      border: 1px solid #2a2d3e;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+    }
+    .auth-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e0e4f0;
+      margin-bottom: 0.4rem;
+      text-align: center;
+    }
+    .auth-subtitle {
+      text-align: center;
+      color: #5a5f7a;
+      font-size: 0.88rem;
+      margin-bottom: 2rem;
+    }
+    .auth-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 1.1rem;
+    }
+    .auth-field label {
+      font-size: 0.82rem;
+      color: #8b91a8;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .auth-field input {
+      background: #0d0f1a;
+      border: 1px solid #2a2d3e;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      color: #e0e4f0;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .auth-field input:focus {
+      border-color: #00e5ff;
+    }
+    .auth-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: #00e5ff;
+      color: #0d0f1a;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: opacity 0.2s;
+    }
+    .auth-btn:hover { opacity: 0.85; }
+    .auth-error {
+      background: rgba(240, 96, 96, 0.12);
+      border: 1px solid #f06060;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      color: #f06060;
+      font-size: 0.88rem;
+      margin-bottom: 1.2rem;
+    }
+    .auth-success {
+      background: rgba(1, 245, 13, 0.08);
+      border: 1px solid #01f50d;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      color: #01f50d;
+      font-size: 0.88rem;
+      margin-bottom: 1.2rem;
+    }
+    .auth-footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.88rem;
+      color: #5a5f7a;
+    }
+    .auth-footer a {
+      color: #00e5ff;
+      text-decoration: none;
+    }
+    .auth-footer a:hover { text-decoration: underline; }
+    .auth-back {
+      display: block;
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 0.82rem;
+      color: #5a5f7a;
+      text-decoration: none;
+    }
+    .auth-back:hover { color: #8b91a8; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-title">Iniciar sesión</div>
+      <div class="auth-subtitle">Sign Language Detector</div>
+
+      {% if registered %}
+      <div class="auth-success">Cuenta creada. Ya puedes iniciar sesión.</div>
+      {% endif %}
+
+      {% if error %}
+      <div class="auth-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/login">
+        <div class="auth-field">
+          <label>Usuario o email</label>
+          <input type="text" name="identifier" autocomplete="username" required autofocus>
+        </div>
+        <div class="auth-field">
+          <label>Contraseña</label>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="auth-btn">Entrar</button>
+      </form>
+
+      <div class="auth-footer">
+        ¿No tienes cuenta? <a href="/register">Regístrate</a>
+      </div>
+      <a href="/" class="auth-back">← Volver al detector</a>
+    </div>
+  </div>
+</body>
+</html>

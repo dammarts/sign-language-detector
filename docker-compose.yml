@@ -3,9 +3,37 @@ services:
     build: .
     ports:
       - "5000:5000"
-    # Acceso a la cámara en Linux: pasar el dispositivo al contenedor
-    # En Windows/Mac con Docker Desktop esta sección no aplica
-    devices:
-      - /dev/video0:/dev/video0
+    env_file: .env
     environment:
       - PYTHONUNBUFFERED=1
+      - PORT=5000
+      - MONGO_URI=mongodb://${MONGO_USER}:${MONGO_PASS}@mongodb:27017/signdetect?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - signnet
+
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASS}
+      - MONGO_INITDB_DATABASE=signdetect
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - signnet
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  signnet:
+    driver: bridge
+
+volumes:
+  mongo_data:

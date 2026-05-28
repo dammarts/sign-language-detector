@@ -362,24 +362,42 @@ main {
   aspect-ratio: 4/3;
 }
 
-/* scanning line animation */
-.video-wrap::before {
+/* hand guide rectangle */
+.hand-guide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48%;
+  height: 68%;
+  border: 2px dashed rgba(1, 245, 13, 0.55);
+  border-radius: 14px;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.hand-guide.visible {
+  opacity: 1;
+}
+.hand-guide::before {
   content: '';
   position: absolute;
-  left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  opacity: 0;
-  z-index: 4;
-  animation: scan 4s ease-in-out infinite;
-  pointer-events: none;
+  inset: 0;
+  border-radius: 12px;
+  background: rgba(1, 245, 13, 0.04);
 }
-
-@keyframes scan {
-  0%   { top: 0%;   opacity: 0; }
-  5%   { opacity: 0.6; }
-  95%  { opacity: 0.6; }
-  100% { top: 100%; opacity: 0; }
+.hand-guide::after {
+  content: 'Mano detectada';
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(1, 245, 13, 0.55);
+  white-space: nowrap;
+  letter-spacing: 0.06em;
 }
 
 /* corner brackets */
@@ -604,6 +622,29 @@ footer .sep {
 .nav-link:hover {
   color: var(--text);
   border-color: var(--border3);
+}
+
+.nav-link--cta {
+  color: #00e5ff;
+  border-color: rgba(0, 229, 255, 0.35);
+}
+.nav-link--cta:hover {
+  color: #00e5ff;
+  border-color: rgba(0, 229, 255, 0.7);
+}
+
+.nav-link--logout {
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--surface);
+}
+
+.nav-user {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.05em;
 }
 
 /* ── RESPONSIVE ─────────────────────────────────── */

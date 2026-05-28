@@ -29,7 +29,7 @@ def train(country: str):
     for path in DATA_SOURCES[country]:
         if path.exists():
             df_part = pd.read_csv(path)
-            print(f"  Cargado: {path.name} → {len(df_part)} filas")
+            print(f"  Cargado: {path.name} -> {len(df_part)} filas")
             dfs.append(df_part)
         else:
             print(f"  Saltando (no existe): {path}")
